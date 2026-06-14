@@ -1,0 +1,37 @@
+RECORD_SIZE = 50
+START_MARKER = 0x7E
+END_MARKER = 0x7F
+
+CSV_HEADER = [
+    "line_number",
+    "sequence_number",
+    "payload_id",
+    "timestamp_unix",
+    "timestamp_utc",
+    *[f"sipm_{idx:02d}_trigger_count" for idx in range(1, 17)],
+    "threshold_01_mv",
+    "threshold_02_mv",
+    "threshold_03_mv",
+    "threshold_04_mv",
+    "pressure_mbar",
+    "satellite_index",
+    "satellite_count_range",
+    "altitude_m",
+    "magnetometer_x_uT",
+    "magnetometer_y_uT",
+    "magnetometer_z_uT",
+    "sipm_stack_temp_c",
+    "power_board_temp_c",
+    "control_board_temp_c",
+    "sipm_teensy1_temp_c",
+    "sipm_teensy2_temp_c",
+    "telemetry_teensy_temp_c",
+    "telemetry_board_temp_c",
+    "status_type",
+    "status_data",
+    "crc_received",
+    "crc_calculated",
+    "crc_ok",
+    "frame_ok",
+    "raw_hex",
+]

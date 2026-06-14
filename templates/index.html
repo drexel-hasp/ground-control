@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HASP Ground Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-deep:     #070c17;
+      --bg-base:     #0b1120;
+      --bg-card:     #101828;
+      --bg-card-alt: #0d1422;
+      --bg-hover:    #16233a;
+      --bg-selected: #132140;
+      --border:      #1c2d45;
+      --border-mid:  #263d57;
+      --text:        #e2e8f0;
+      --text-dim:    #8fa8c8;
+      --text-muted:  #3d5470;
+      --accent:      #38bdf8;
+      --green:       #34d399;
+      --green-bg:    #031f12;
+      --red:         #f87171;
+      --red-bg:      #1a0a0a;
+      --yellow:      #fbbf24;
+      --font-ui:     'Inter', system-ui, sans-serif;
+      --font-mono:   'JetBrains Mono', 'Courier New', monospace;
+    }
+
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      display: flex; flex-direction: column;
+      background: var(--bg-base); color: var(--text);
+      font-family: var(--font-ui); font-size: 13px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Scrollbars ──────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 3px; }
+
+    /* ── Header ──────────────────────────────────────────────────────────── */
+    header {
+      flex-shrink: 0;
+      background: linear-gradient(120deg, #080f22 0%, #0d1f42 100%);
+      border-bottom: 1px solid #1a3050;
+      padding: 10px 24px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-icon {
+      width: 34px; height: 34px; border-radius: 9px;
+      background: linear-gradient(135deg, #1a4fc4, #0891b2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px; flex-shrink: 0;
+      box-shadow: 0 0 14px rgba(56,189,248,.2);
+    }
+    .brand-title { font-size: 15px; font-weight: 700; letter-spacing: .03em; color: #f1f5f9; }
+    .brand-sub   { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+    #header-stats { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 600; letter-spacing: .02em; border: 1px solid;
+    }
+    .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+    .pill-blue  { color: #60a5fa; border-color: #1a3a5f; background: #0a1e38; }
+    .pill-green { color: var(--green); border-color: #064e38; background: var(--green-bg); }
+    .pill-red   { color: var(--red);  border-color: #6b1414; background: var(--red-bg); }
+    .pill-gray  { color: var(--text-dim); border-color: var(--border); background: var(--bg-card); }
+
+    /* ── Input panel ─────────────────────────────────────────────────────── */
+    .input-panel {
+      flex-shrink: 0;
+      background: var(--bg-base); border-bottom: 1px solid var(--border);
+      padding: 10px 24px; display: flex; gap: 10px; align-items: flex-start;
+    }
+    textarea#input-area {
+      flex: 1; min-width: 0;
+      background: var(--bg-deep); border: 1px solid var(--border-mid);
+      border-radius: 7px; color: #4ade80;
+      font-family: var(--font-mono); font-size: 11px; line-height: 1.65;
+      padding: 10px 13px; resize: none; height: 90px; outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    textarea#input-area::placeholder { color: #1c3050; }
+    textarea#input-area:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(56,189,248,.1);
+    }
+    .btn-col { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+      padding: 7px 15px; border-radius: 7px; font-size: 12px; font-weight: 500;
+      border: 1px solid var(--border-mid); background: var(--bg-card); color: #c9d1d9;
+      cursor: pointer; font-family: var(--font-ui);
+      transition: background .1s, border-color .1s, color .1s;
+      white-space: nowrap; user-select: none; min-width: 108px;
+    }
+    .btn:hover  { background: var(--bg-hover); border-color: var(--accent); color: #fff; }
+    .btn:active { background: var(--bg-selected); }
+    .btn-primary { background: #1a4bc4; border-color: #2d64e0; color: #fff; }
+    .btn-primary:hover { background: #2558d8; border-color: #5080f8; }
+
+    /* ── Status strip ────────────────────────────────────────────────────── */
+    #status-bar {
+      flex-shrink: 0; padding: 5px 24px;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; font-weight: 500;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-base); color: var(--text-muted);
+      transition: background .25s, color .25s;
+    }
+    #status-bar .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+    /* ── Main layout ─────────────────────────────────────────────────────── */
+    .main { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Packet table ────────────────────────────────────────────────────── */
+    .table-wrap {
+      display: flex; flex-direction: column; flex: 1; min-width: 0;
+      overflow: hidden; border-right: 1px solid var(--border);
+    }
+    .panel-bar {
+      flex-shrink: 0; padding: 7px 16px;
+      background: var(--bg-base); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .panel-label {
+      font-size: 10px; font-weight: 700; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .table-scroll { flex: 1; overflow: auto; }
+
+    table#packet-table { width: 100%; border-collapse: collapse; }
+    table#packet-table thead th {
+      position: sticky; top: 0; z-index: 10;
+      background: var(--bg-deep); padding: 8px 14px;
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--text-muted); text-align: left;
+      border-bottom: 1px solid var(--border-mid); white-space: nowrap;
+    }
+    table#packet-table tbody tr {
+      cursor: pointer; border-bottom: 1px solid var(--border);
+      transition: background .07s;
+    }
+    table#packet-table tbody tr:hover     td { background: var(--bg-hover); }
+    table#packet-table tbody tr.selected  td { background: var(--bg-selected); }
+    table#packet-table tbody tr.selected  td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+    table#packet-table tbody tr.bad       td { background: #100808; }
+    table#packet-table tbody tr.bad:hover td { background: #180e0e; }
+    table#packet-table tbody tr.bad.selected td { background: #1a0e18; }
+    table#packet-table tbody td {
+      padding: 8px 14px; color: var(--text);
+      font-family: var(--font-mono); font-size: 11px; white-space: nowrap;
+    }
+    table#packet-table tbody td.dim { color: var(--text-muted); font-size: 10.5px; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 8px; border-radius: 5px;
+      font-size: 10px; font-weight: 700; letter-spacing: .05em; border: 1px solid;
+    }
+    .ok   { color: var(--green); border-color: #064e38; background: var(--green-bg); }
+    .fail { color: var(--red);   border-color: #6b1414; background: var(--red-bg); }
+
+    /* ── Detail panel ────────────────────────────────────────────────────── */
+    .detail-wrap {
+      flex-shrink: 0; width: 400px;
+      display: flex; flex-direction: column;
+      background: var(--bg-base); overflow: hidden;
+    }
+    #detail-scroll { flex: 1; overflow-y: auto; padding: 10px; }
+
+    .dg { margin-bottom: 10px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .dg-head {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 12px; background: var(--bg-card);
+      font-size: 10px; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--text-dim);
+    }
+    .dg-stripe { width: 3px; height: 13px; border-radius: 2px; flex-shrink: 0; }
+
+    .dg-row { display: flex; align-items: baseline; border-top: 1px solid var(--border); }
+    .dg-row:nth-child(even) { background: var(--bg-card-alt); }
+    .dg-row:nth-child(odd)  { background: var(--bg-card); }
+    .dg-key {
+      flex-shrink: 0; width: 168px; padding: 5px 12px;
+      font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+      border-right: 1px solid var(--border);
+    }
+    .dg-val {
+      flex: 1; padding: 5px 12px;
+      font-family: var(--font-mono); font-size: 11px;
+      color: var(--text); word-break: break-all;
+    }
+    .dg-val.good { color: var(--green); font-weight: 600; }
+    .dg-val.bad  { color: var(--red);   font-weight: 600; }
+    .dg-val.hex  { font-size: 9px; letter-spacing: .05em; color: var(--text-dim); }
+
+    /* SiPM 4×4 grid */
+    .sipm-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      border-top: 1px solid var(--border);
+    }
+    .sipm-cell {
+      padding: 9px 6px; text-align: center;
+      background: var(--bg-card-alt);
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .sipm-cell:nth-child(4n)       { border-right: none; }
+    .sipm-cell:nth-last-child(-n+4){ border-bottom: none; }
+    .sipm-ch  { font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); margin-bottom: 3px; }
+    .sipm-val { font-family: var(--font-mono); font-size: 15px; font-weight: 600; color: #1e3a5f; }
+    .sipm-val.lit {
+      color: var(--accent);
+      text-shadow: 0 0 10px rgba(56,189,248,.55);
+    }
+
+    /* Empty states */
+    .empty { color: var(--text-muted); text-align: center; font-size: 12px; padding: 60px 0; }
+  </style>
+</head>
+
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">🛰</div>
+      <div>
+        <div class="brand-title">HASP Ground Control</div>
+        <div class="brand-sub">Downlink Telemetry Decoder</div>
+      </div>
+    </div>
+    <div id="header-stats"></div>
+  </header>
+
+  <!-- ── Input panel ────────────────────────────────────────────────────── -->
+  <div class="input-panel">
+    <textarea id="input-area"
+      placeholder="Paste raw downlink lines here  (DOWNLINK_HEX …  or bare 50-byte hex) …"></textarea>
+    <div class="btn-col">
+      <button class="btn btn-primary" onclick="decodeInput()">▶&thinsp;Decode</button>
+      <label class="btn" style="cursor:pointer">
+        📂&thinsp;Open File
+        <input type="file" accept=".txt,.log,*" style="display:none" onchange="openFile(this)">
+      </label>
+      <button class="btn" onclick="clearAll()">✕&thinsp;Clear</button>
+    </div>
+  </div>
+
+  <!-- ── Status strip ───────────────────────────────────────────────────── -->
+  <div id="status-bar">
+    <span class="dot"></span>
+    <span id="status-msg">Ready — paste data or open a file, then click Decode.</span>
+  </div>
+
+  <!-- ── Main ───────────────────────────────────────────────────────────── -->
+  <div class="main">
+
+    <!-- Packet table -->
+    <div class="table-wrap">
+      <div class="panel-bar">
+        <span class="panel-label">Packets</span>
+        <button class="btn" style="min-width:0;padding:4px 11px;font-size:11px" onclick="downloadCsv()">
+          ⬇&thinsp;Download CSV
+        </button>
+      </div>
+      <div class="table-scroll">
+        <table id="packet-table">
+          <thead>
+            <tr>
+              <th>Line</th><th>Seq #</th><th>Timestamp (UTC)</th>
+              <th>Alt (m)</th><th>Pres (mbar)</th><th>Satellites</th><th>CRC</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="7" class="empty">No packets decoded yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Detail panel -->
+    <div class="detail-wrap">
+      <div class="panel-bar">
+        <span class="panel-label">Packet Details</span>
+      </div>
+      <div id="detail-scroll">
+        <div class="empty" style="margin-top:60px">Select a packet to inspect it.</div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+
+  <script>
+    const CSV_HEADER = {{ csv_header | tojson }};
+
+    const GROUPS = [
+      { title: 'Packet Header',     color: '#38bdf8',
+        fields: ['sequence_number','payload_id','timestamp_unix','timestamp_utc'] },
+      { title: 'Thresholds (mV)',   color: '#a78bfa',
+        fields: ['threshold_01_mv','threshold_02_mv','threshold_03_mv','threshold_04_mv'] },
+      { title: 'SiPM Trigger Counts', color: '#22d3ee', sipm: true,
+        fields: Array.from({length:16}, (_,i) => `sipm_${String(i+1).padStart(2,'0')}_trigger_count`) },
+      { title: 'Environment',       color: '#34d399',
+        fields: ['pressure_mbar','satellite_index','satellite_count_range','altitude_m',
+                 'magnetometer_x_uT','magnetometer_y_uT','magnetometer_z_uT'] },
+      { title: 'Temperatures (°C)', color: '#fb923c',
+        fields: ['sipm_stack_temp_c','power_board_temp_c','control_board_temp_c',
+                 'sipm_teensy1_temp_c','sipm_teensy2_temp_c',
+                 'telemetry_teensy_temp_c','telemetry_board_temp_c'] },
+      { title: 'Status',            color: '#fbbf24',
+        fields: ['status_type','status_data'] },
+      { title: 'Frame Integrity',   color: null,   /* set per-packet */
+        fields: ['crc_received','crc_calculated','crc_ok','frame_ok','raw_hex'] },
+    ];
+
+    const STATUS = {
+      idle:  { bg: 'transparent', color: '#3d5470' },
+      ok:    { bg: '#021a10',     color: '#34d399' },
+      warn:  { bg: '#1a1200',     color: '#fbbf24' },
+      error: { bg: '#1a0808',     color: '#f87171' },
+      info:  { bg: 'transparent', color: '#60a5fa' },
+    };
+
+    let packets = [];
+    let activeTr = null;
+
+    // ── Decode ─────────────────────────────────────────────────────────────
+
+    async function decodeInput() {
+      const text = document.getElementById('input-area').value;
+      if (!text.trim()) { setStatus('Nothing to decode.', 'warn'); return; }
+      await run({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+    }
+
+    async function openFile(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const fd = new FormData();
+      fd.append('file', file);
+      await run({ method: 'POST', body: fd });
+      input.value = '';
+    }
+
+    async function run(opts) {
+      setStatus('Decoding…', 'info');
+      try {
+        const resp = await fetch('/decode', opts);
+        if (!resp.ok) throw new Error(`Server error ${resp.status}`);
+        const data = await resp.json();
+        packets = data.packets;
+        activeTr = null;
+        buildTable(packets);
+        updateHeaderStats(data);
+        if (data.decoded > 0) {
+          setStatus(
+            `Decoded ${data.decoded} packet(s).` +
+            (data.ignored ? `  ${data.ignored} line(s) skipped.` : '') +
+            '  Click a row to inspect it.',
+            'ok');
+        } else {
+          setStatus(`No packets found — ${data.ignored} line(s) scanned.`, 'warn');
+        }
+      } catch (e) {
+        setStatus(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    function clearAll() {
+      document.getElementById('input-area').value = '';
+      packets = []; activeTr = null;
+      buildTable([]);
+      document.getElementById('detail-scroll').innerHTML =
+        '<div class="empty" style="margin-top:60px">Select a packet to inspect it.</div>';
+      document.getElementById('header-stats').innerHTML = '';
+      setStatus('Ready — paste data or open a file, then click Decode.', 'idle');
+    }
+
+    // ── CSV download ───────────────────────────────────────────────────────
+
+    function downloadCsv() {
+      if (!packets.length) { alert('No packets to export.'); return; }
+      const rows = [CSV_HEADER.join(','), ...packets.map(p => CSV_HEADER.map(k => esc_csv(p[k])).join(','))];
+      const a = Object.assign(document.createElement('a'), {
+        href: URL.createObjectURL(new Blob([rows.join('\r\n')], { type: 'text/csv' })),
+        download: 'downlink_decoded.csv',
+      });
+      a.click();
+    }
+
+    function esc_csv(v) {
+      const s = String(v ?? '');
+      return (s.includes(',') || s.includes('"') || s.includes('\n'))
+        ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }
+
+    // ── Table ──────────────────────────────────────────────────────────────
+
+    function fmtTs(ts) {
+      if (!ts || ts === '0') return '—';
+      return ts.replace('T', ' ').replace('+00:00', '').replace(/\.\d+/, '') + ' Z';
+    }
+
+    function buildTable(pkts) {
+      const tbody = document.getElementById('tbody');
+      if (!pkts.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No packets decoded yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = pkts.map((p, i) => `
+        <tr class="${p.crc_ok ? '' : 'bad'}" onclick="pickRow(this, ${i})">
+          <td class="dim">${p.line_number}</td>
+          <td>${p.sequence_number}</td>
+          <td>${fmtTs(p.timestamp_utc)}</td>
+          <td style="text-align:right">${Number(p.altitude_m).toLocaleString()}</td>
+          <td style="text-align:right">${p.pressure_mbar}</td>
+          <td>${p.satellite_count_range}</td>
+          <td>${p.crc_ok
+            ? '<span class="badge ok">&#10003; OK</span>'
+            : '<span class="badge fail">&#10007; FAIL</span>'}</td>
+        </tr>`).join('');
+    }
+
+    function pickRow(tr, idx) {
+      if (activeTr) activeTr.classList.remove('selected');
+      tr.classList.add('selected');
+      activeTr = tr;
+      buildDetail(packets[idx]);
+    }
+
+    // ── Detail ─────────────────────────────────────────────────────────────
+
+    function buildDetail(pkt) {
+      const html = GROUPS.map(g => {
+        const color = g.color ?? (pkt.crc_ok ? '#34d399' : '#f87171');
+        let body = '';
+
+        if (g.sipm) {
+          body = '<div class="sipm-grid">' +
+            g.fields.map(f => {
+              const ch  = f.match(/(\d+)/)[1];
+              const val = pkt[f] ?? 0;
+              return `<div class="sipm-cell">
+                <div class="sipm-ch">ch${ch}</div>
+                <div class="sipm-val${val > 0 ? ' lit' : ''}">${val}</div>
+              </div>`;
+            }).join('') +
+            '</div>';
+        } else {
+          body = g.fields.map(f => {
+            const raw = pkt[f] ?? '';
+            let cls = 'dg-val';
+            if (f === 'crc_ok' || f === 'frame_ok') cls += raw ? ' good' : ' bad';
+            if (f === 'raw_hex') cls += ' hex';
+            return `<div class="dg-row">
+              <div class="dg-key">${f}</div>
+              <div class="${cls}">${raw}</div>
+            </div>`;
+          }).join('');
+        }
+
+        return `<div class="dg">
+          <div class="dg-head">
+            <div class="dg-stripe" style="background:${color}"></div>
+            ${g.title}
+          </div>
+          ${body}
+        </div>`;
+      }).join('');
+
+      document.getElementById('detail-scroll').innerHTML = html;
+    }
+
+    // ── Stats & status ─────────────────────────────────────────────────────
+
+    function updateHeaderStats(data) {
+      const failed = data.packets.filter(p => !p.crc_ok).length;
+      document.getElementById('header-stats').innerHTML =
+        `<span class="pill pill-blue"><span class="pill-dot"></span>${data.decoded} packets</span>` +
+        (failed
+          ? `<span class="pill pill-red"><span class="pill-dot"></span>${failed} CRC fail</span>`
+          : `<span class="pill pill-green"><span class="pill-dot"></span>All CRC OK</span>`) +
+        (data.ignored ? `<span class="pill pill-gray">${data.ignored} skipped</span>` : '');
+    }
+
+    function setStatus(msg, type = 'idle') {
+      const cfg = STATUS[type] || STATUS.idle;
+      const bar = document.getElementById('status-bar');
+      bar.style.background = cfg.bg;
+      bar.style.color = cfg.color;
+      document.getElementById('status-msg').textContent = msg;
+    }
+  </script>
+</body>
+</html>

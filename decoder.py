@@ -1,63 +1,11 @@
-#!/usr/bin/env python3
-"""Decode telemetry downlink debug byte lines into CSV.
-
-Expected input is a text capture from USB serial where each downlink packet is
-printed by firmware as:
-
-    DOWNLINK_HEX 7E000042...7F
-
-Bare 50-byte hex lines are also accepted. The older spaced debug format is
-accepted too. Other logger lines are ignored.
-"""
-
 from __future__ import annotations
 
-import argparse
 import csv
 import re
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-
-RECORD_SIZE = 50
-START_MARKER = 0x7E
-END_MARKER = 0x7F
-
-
-CSV_HEADER = [
-    "line_number",
-    "sequence_number",
-    "payload_id",
-    "timestamp_unix",
-    "timestamp_utc",
-    *[f"sipm_{idx:02d}_trigger_count" for idx in range(1, 17)],
-    "threshold_01_mv",
-    "threshold_02_mv",
-    "threshold_03_mv",
-    "threshold_04_mv",
-    "pressure_mbar",
-    "satellite_index",
-    "satellite_count_range",
-    "altitude_m",
-    "magnetometer_x_uT",
-    "magnetometer_y_uT",
-    "magnetometer_z_uT",
-    "sipm_stack_temp_c",
-    "power_board_temp_c",
-    "control_board_temp_c",
-    "sipm_teensy1_temp_c",
-    "sipm_teensy2_temp_c",
-    "telemetry_teensy_temp_c",
-    "telemetry_board_temp_c",
-    "status_type",
-    "status_data",
-    "crc_received",
-    "crc_calculated",
-    "crc_ok",
-    "frame_ok",
-    "raw_hex",
-]
+from constants import CSV_HEADER, RECORD_SIZE, START_MARKER, END_MARKER
 
 
 def crc16_ccitt_false(data: bytes) -> int:
@@ -112,7 +60,7 @@ def extract_packet_from_line(line: str) -> bytes | None:
     payload = line.strip()
     marker_idx = payload.find("DOWNLINK_HEX")
     if marker_idx >= 0:
-        payload = payload[marker_idx + len("DOWNLINK_HEX") :]
+        payload = payload[marker_idx + len("DOWNLINK_HEX"):]
 
     hex_tokens = re.findall(r"(?:0x)?([0-9A-Fa-f]{2})", payload)
     if len(hex_tokens) != RECORD_SIZE:
@@ -172,54 +120,27 @@ def decode_packet(packet: bytes, line_number: int) -> dict[str, object]:
     return row
 
 
-def default_output_path(input_path: Path) -> Path:
-    return input_path.with_suffix(".csv")
+def decode_text(text: str) -> tuple[list[dict], int, int]:
+    """Decode all packets from a text string. Returns (rows, decoded_count, ignored_count)."""
+    rows = []
+    ignored = 0
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        packet = extract_packet_from_line(line)
+        if packet is None:
+            ignored += 1
+            continue
+        rows.append(decode_packet(packet, line_number))
+    return rows, len(rows), ignored
 
 
 def decode_file(input_path: Path, output_path: Path) -> tuple[int, int]:
-    decoded_count = 0
-    ignored_count = 0
+    """Decode packets from a file and write to CSV. Returns (decoded_count, ignored_count)."""
+    text = input_path.read_text(encoding="utf-8", errors="replace")
+    rows, decoded, ignored = decode_text(text)
 
-    with input_path.open("r", encoding="utf-8", errors="replace") as source, \
-            output_path.open("w", newline="", encoding="utf-8") as destination:
-        writer = csv.DictWriter(destination, fieldnames=CSV_HEADER)
+    with output_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_HEADER)
         writer.writeheader()
+        writer.writerows(rows)
 
-        for line_number, line in enumerate(source, start=1):
-            packet = extract_packet_from_line(line)
-            if packet is None:
-                ignored_count += 1
-                continue
-
-            writer.writerow(decode_packet(packet, line_number))
-            decoded_count += 1
-
-    return decoded_count, ignored_count
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Decode HASP downlink debug byte lines to CSV."
-    )
-    parser.add_argument("input", type=Path, help="Text file with packet lines")
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=Path,
-        help="Output CSV path; defaults to input path with .csv suffix",
-    )
-    args = parser.parse_args()
-
-    input_path = args.input
-    output_path = args.output or default_output_path(input_path)
-
-    decoded_count, ignored_count = decode_file(input_path, output_path)
-    print(
-        f"Decoded {decoded_count} packet(s) to {output_path}; "
-        f"ignored {ignored_count} non-packet line(s)."
-    )
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    return decoded, ignored
