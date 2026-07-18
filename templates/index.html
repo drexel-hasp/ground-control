@@ -172,12 +172,28 @@
     .fail { color: var(--red);   border-color: #6b1414; background: var(--red-bg); }
 
     /* ── Detail panel ────────────────────────────────────────────────────── */
+    .resize-handle {
+      flex-shrink: 0; width: 6px; cursor: col-resize;
+      background: transparent; position: relative;
+    }
+    .resize-handle::after {
+      content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px;
+      background: var(--border-mid);
+    }
+    .resize-handle:hover::after, .resize-handle.dragging::after { background: var(--accent); }
+
     .detail-wrap {
-      flex-shrink: 0; width: 400px;
+      flex-shrink: 0; width: 400px; min-width: 260px; max-width: 900px;
       display: flex; flex-direction: column;
       background: var(--bg-base); overflow: hidden;
     }
     #detail-scroll { flex: 1; overflow-y: auto; padding: 10px; }
+
+    .advanced-toggle {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--text-dim); cursor: pointer; user-select: none;
+    }
+    .advanced-toggle input { accent-color: var(--accent); cursor: pointer; }
 
     .dg { margin-bottom: 10px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
     .dg-head {
@@ -227,6 +243,48 @@
 
     /* Empty states */
     .empty { color: var(--text-muted); text-align: center; font-size: 12px; padding: 60px 0; }
+
+    /* ── View tabs ───────────────────────────────────────────────────────── */
+    .view-tabs { display: flex; gap: 4px; }
+    .tab-btn {
+      background: transparent; border: 1px solid transparent; color: var(--text-muted);
+      font-family: var(--font-ui); font-size: 10px; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; padding: 4px 10px; border-radius: 6px; cursor: pointer;
+    }
+    .tab-btn:hover { color: var(--text-dim); background: var(--bg-hover); }
+    .tab-btn.active { color: var(--accent); background: var(--bg-selected); border-color: var(--border-mid); }
+
+    /* ── Graphs view ─────────────────────────────────────────────────────── */
+    .graphs-view { flex: 1; overflow-y: auto; padding: 14px; }
+    .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 12px; }
+    .chart-block { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--bg-card-alt); }
+    .chart-block.advanced-chart { display: none; }
+    .graphs-view.show-advanced .chart-block.advanced-chart { display: block; }
+    .chart-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 7px 12px; background: var(--bg-card);
+      font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-dim);
+    }
+    .chart-head-title { display: flex; align-items: center; gap: 8px; }
+    .chart-unit { color: var(--text-muted); font-weight: 500; text-transform: none; letter-spacing: 0; font-size: 10px; }
+    .chart-canvas-wrap { position: relative; height: 190px; padding: 8px 10px 2px; }
+    .chart-canvas-wrap canvas { width: 100%; height: 100%; display: block; cursor: crosshair; }
+    .chart-tooltip {
+      position: absolute; pointer-events: none; z-index: 20; display: none;
+      background: var(--bg-deep); border: 1px solid var(--border-mid); border-radius: 6px;
+      padding: 6px 9px; font-family: var(--font-mono); font-size: 10px; color: var(--text);
+      box-shadow: 0 6px 18px rgba(0,0,0,.4); white-space: nowrap;
+    }
+    .chart-tooltip .tt-x { color: var(--text-muted); margin-bottom: 3px; font-size: 9.5px; }
+    .chart-tooltip .tt-row { display: flex; align-items: center; gap: 5px; }
+    .chart-tooltip .tt-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .chart-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 6px 12px 10px; }
+    .legend-chip {
+      display: inline-flex; align-items: center; gap: 5px; cursor: pointer; user-select: none;
+      font-family: var(--font-mono); font-size: 10px; color: var(--text-dim);
+    }
+    .legend-chip.off { color: var(--text-muted); text-decoration: line-through; opacity: .55; }
+    .legend-swatch { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
   </style>
 </head>
 
@@ -252,7 +310,7 @@
       <button class="btn btn-primary" onclick="decodeInput()">▶&thinsp;Decode</button>
       <label class="btn" style="cursor:pointer">
         📂&thinsp;Open File
-        <input type="file" accept=".txt,.log,*" style="display:none" onchange="openFile(this)">
+        <input type="file" style="display:none" onchange="openFile(this)">
       </label>
       <button class="btn" onclick="clearAll()">✕&thinsp;Clear</button>
     </div>
@@ -270,16 +328,19 @@
     <!-- Packet table -->
     <div class="table-wrap">
       <div class="panel-bar">
-        <span class="panel-label">Packets</span>
+        <div class="view-tabs">
+          <button class="tab-btn active" id="tab-btn-table" onclick="switchView('table')">Packets</button>
+          <button class="tab-btn" id="tab-btn-graphs" onclick="switchView('graphs')">Graphs</button>
+        </div>
         <button class="btn" style="min-width:0;padding:4px 11px;font-size:11px" onclick="downloadCsv()">
           ⬇&thinsp;Download CSV
         </button>
       </div>
-      <div class="table-scroll">
+      <div class="table-scroll" id="table-view">
         <table id="packet-table">
           <thead>
             <tr>
-              <th>Line</th><th>Seq #</th><th>Timestamp (UTC)</th>
+              <th>Pkt #</th><th>Seq #</th><th>Timestamp (UTC)</th>
               <th>Alt (m)</th><th>Pres (mbar)</th><th>Satellites</th><th>CRC</th>
             </tr>
           </thead>
@@ -288,12 +349,22 @@
           </tbody>
         </table>
       </div>
+      <div class="graphs-view" id="graphs-view" style="display:none">
+        <div class="chart-grid" id="default-charts"></div>
+      </div>
     </div>
 
+    <!-- Resize handle -->
+    <div class="resize-handle" id="resize-handle"></div>
+
     <!-- Detail panel -->
-    <div class="detail-wrap">
+    <div class="detail-wrap" id="detail-wrap">
       <div class="panel-bar">
         <span class="panel-label">Packet Details</span>
+        <label class="advanced-toggle">
+          <input type="checkbox" id="advanced-toggle" onchange="toggleAdvanced(this.checked)">
+          Advanced
+        </label>
       </div>
       <div id="detail-scroll">
         <div class="empty" style="margin-top:60px">Select a packet to inspect it.</div>
@@ -308,7 +379,7 @@
     const GROUPS = [
       { title: 'Packet Header',     color: '#38bdf8',
         fields: ['sequence_number','payload_id','timestamp_unix','timestamp_utc'] },
-      { title: 'Thresholds (mV)',   color: '#a78bfa',
+      { title: 'Thresholds (mV)',   color: '#a78bfa',   advanced: true,
         fields: ['threshold_01_mv','threshold_02_mv','threshold_03_mv','threshold_04_mv'] },
       { title: 'SiPM Trigger Counts', color: '#22d3ee', sipm: true,
         fields: Array.from({length:16}, (_,i) => `sipm_${String(i+1).padStart(2,'0')}_trigger_count`) },
@@ -321,7 +392,7 @@
                  'telemetry_teensy_temp_c','telemetry_board_temp_c'] },
       { title: 'Status',            color: '#fbbf24',
         fields: ['status_type','status_data'] },
-      { title: 'Frame Integrity',   color: null,   /* set per-packet */
+      { title: 'Frame Integrity',   color: null,   /* set per-packet */ advanced: true,
         fields: ['crc_received','crc_calculated','crc_ok','frame_ok','raw_hex'] },
     ];
 
@@ -335,6 +406,251 @@
 
     let packets = [];
     let activeTr = null;
+    let currentPkt = null;
+    let showAdvanced = false;
+
+    // ── Chart engine ─────────────────────────────────────────────────────────
+
+    const FIELD_CATALOG = [
+      ...Array.from({length:16}, (_,i) => ({
+        group: 'SiPM Trigger Counts', key: `sipm_${String(i+1).padStart(2,'0')}_trigger_count`,
+        label: `Ch ${i+1}`, unit: 'counts',
+      })),
+      { group: 'Temperatures', key: 'sipm_stack_temp_c',        label: 'SiPM Stack',        unit: '°C' },
+      { group: 'Temperatures', key: 'power_board_temp_c',       label: 'Power Board',       unit: '°C' },
+      { group: 'Temperatures', key: 'control_board_temp_c',     label: 'Control Board',     unit: '°C' },
+      { group: 'Temperatures', key: 'sipm_teensy1_temp_c',      label: 'SiPM Teensy 1',     unit: '°C' },
+      { group: 'Temperatures', key: 'sipm_teensy2_temp_c',      label: 'SiPM Teensy 2',     unit: '°C' },
+      { group: 'Temperatures', key: 'telemetry_teensy_temp_c',  label: 'Telemetry Teensy',  unit: '°C' },
+      { group: 'Temperatures', key: 'telemetry_board_temp_c',   label: 'Telemetry Board',   unit: '°C' },
+      { group: 'Environment',  key: 'altitude_m',       label: 'Altitude',          unit: 'm' },
+      { group: 'Environment',  key: 'pressure_mbar',    label: 'Pressure',          unit: 'mbar' },
+      { group: 'Environment',  key: 'satellite_index',  label: 'GPS Satellites',    unit: 'idx' },
+      { group: 'Magnetometer', key: 'magnetometer_x_uT', label: 'Mag X', unit: 'µT' },
+      { group: 'Magnetometer', key: 'magnetometer_y_uT', label: 'Mag Y', unit: 'µT' },
+      { group: 'Magnetometer', key: 'magnetometer_z_uT', label: 'Mag Z', unit: 'µT' },
+      { group: 'Thresholds',   key: 'threshold_01_mv', label: 'Threshold 1', unit: 'mV' },
+      { group: 'Thresholds',   key: 'threshold_02_mv', label: 'Threshold 2', unit: 'mV' },
+      { group: 'Thresholds',   key: 'threshold_03_mv', label: 'Threshold 3', unit: 'mV' },
+      { group: 'Thresholds',   key: 'threshold_04_mv', label: 'Threshold 4', unit: 'mV' },
+      { group: 'Status',       key: 'status_type', label: 'Status Type', unit: '' },
+      { group: 'Status',       key: 'status_data', label: 'Status Data', unit: '' },
+    ];
+    function distinctColor(i, total) {
+      return `hsl(${Math.round((i * 360) / Math.max(total, 1)) % 360}, 72%, 62%)`;
+    }
+
+    function formatX(pkt) {
+      if (pkt.timestamp_unix) {
+        const m = String(pkt.timestamp_utc).match(/T(\d\d:\d\d:\d\d)/);
+        if (m) return m[1];
+      }
+      return `#${pkt.sequence_number}`;
+    }
+
+    class TimeChart {
+      constructor(canvas, tooltipEl, legendEl, seriesDefs) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.tooltipEl = tooltipEl;
+        this.legendEl = legendEl;
+        this.series = seriesDefs; // [{key,label,color}]
+        this.hidden = new Set();
+        this.data = [];
+        this._layout = null;
+        this._renderLegend();
+        this._bindEvents();
+        new ResizeObserver(() => this.draw()).observe(canvas.parentElement);
+      }
+
+      setData(pkts) { this.data = pkts; this.draw(); }
+
+      _renderLegend() {
+        this.legendEl.innerHTML = this.series.map(s => `
+          <span class="legend-chip" data-key="${s.key}">
+            <span class="legend-swatch" style="background:${s.color}"></span>${s.label}
+          </span>`).join('');
+        this.legendEl.querySelectorAll('.legend-chip').forEach(chip => {
+          chip.addEventListener('click', () => {
+            const key = chip.dataset.key;
+            if (this.hidden.has(key)) this.hidden.delete(key); else this.hidden.add(key);
+            chip.classList.toggle('off', this.hidden.has(key));
+            this.draw();
+          });
+        });
+      }
+
+      _bindEvents() {
+        this.canvas.addEventListener('mousemove', (e) => this._onHover(e));
+        this.canvas.addEventListener('mouseleave', () => { this.tooltipEl.style.display = 'none'; });
+      }
+
+      _onHover(e) {
+        if (!this._layout || !this.data.length) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const { padL, padR, w, n } = this._layout;
+        const usable = Math.max(w - padL - padR, 1);
+        let idx = Math.round(((mx - padL) / usable) * (n - 1));
+        idx = Math.max(0, Math.min(n - 1, idx));
+        const pkt = this.data[idx];
+        const visible = this.series.filter(s => !this.hidden.has(s.key));
+        if (!visible.length) { this.tooltipEl.style.display = 'none'; return; }
+        this.tooltipEl.innerHTML = `<div class="tt-x">${formatX(pkt)} · seq ${pkt.sequence_number}</div>` +
+          visible.map(s => `<div class="tt-row"><span class="tt-dot" style="background:${s.color}"></span>${s.label}: <b>${pkt[s.key] ?? '—'}</b></div>`).join('');
+        this.tooltipEl.style.display = 'block';
+        const wrapRect = this.canvas.parentElement.getBoundingClientRect();
+        let left = mx + 14;
+        if (left + 150 > wrapRect.width) left = mx - 160;
+        this.tooltipEl.style.left = `${left}px`;
+        this.tooltipEl.style.top = `10px`;
+      }
+
+      draw() {
+        const canvas = this.canvas, ctx = this.ctx;
+        const rect = canvas.parentElement.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        const w = Math.max(rect.width, 10), h = Math.max(rect.height, 10);
+        canvas.width = w * dpr; canvas.height = h * dpr;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, w, h);
+
+        const padL = 42, padR = 8, padT = 10, padB = 20;
+        this._layout = { padL, padR, w, h, n: this.data.length };
+
+        if (!this.data.length) {
+          ctx.fillStyle = '#3d5470';
+          ctx.font = '11px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('No data yet', w / 2, h / 2);
+          return;
+        }
+
+        const visible = this.series.filter(s => !this.hidden.has(s.key));
+        let min = Infinity, max = -Infinity;
+        visible.forEach(s => {
+          this.data.forEach(p => {
+            const v = Number(p[s.key]);
+            if (Number.isFinite(v)) { if (v < min) min = v; if (v > max) max = v; }
+          });
+        });
+        if (!Number.isFinite(min) || !Number.isFinite(max)) { min = 0; max = 1; }
+        if (min === max) { min -= 1; max += 1; }
+        const pad = (max - min) * 0.08;
+        min -= pad; max += pad;
+
+        const n = this.data.length;
+        const usableW = w - padL - padR, usableH = h - padT - padB;
+        const xAt = (i) => padL + (n > 1 ? (i * usableW) / (n - 1) : usableW / 2);
+        const yAt = (v) => padT + usableH - ((v - min) / (max - min)) * usableH;
+
+        // grid + y labels
+        ctx.strokeStyle = '#1c2d45';
+        ctx.fillStyle = '#3d5470';
+        ctx.font = '9px JetBrains Mono, monospace';
+        ctx.textAlign = 'right';
+        const gridLines = 4;
+        for (let g = 0; g <= gridLines; g++) {
+          const v = min + ((max - min) * g) / gridLines;
+          const y = yAt(v);
+          ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.lineWidth = 1; ctx.stroke();
+          ctx.fillText(Math.abs(v) >= 100 ? Math.round(v) : (Math.round(v * 10) / 10), padL - 6, y + 3);
+        }
+
+        // x labels
+        ctx.textAlign = 'center';
+        const xTicks = Math.min(5, n);
+        for (let t = 0; t < xTicks; t++) {
+          const idx = xTicks > 1 ? Math.round((t * (n - 1)) / (xTicks - 1)) : 0;
+          ctx.fillText(formatX(this.data[idx]), xAt(idx), h - 5);
+        }
+
+        // series lines
+        visible.forEach(s => {
+          ctx.strokeStyle = s.color;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          let started = false;
+          this.data.forEach((p, i) => {
+            const v = Number(p[s.key]);
+            if (!Number.isFinite(v)) { started = false; return; }
+            const x = xAt(i), y = yAt(v);
+            if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+          });
+          ctx.stroke();
+        });
+      }
+    }
+
+    let allCharts = [];
+
+    function buildChartBlock(container, title, unit, seriesDefs, { advanced = false } = {}) {
+      const block = document.createElement('div');
+      block.className = 'chart-block' + (advanced ? ' advanced-chart' : '');
+      block.innerHTML = `
+        <div class="chart-head">
+          <div class="chart-head-title">${title} ${unit ? `<span class="chart-unit">(${unit})</span>` : ''}</div>
+        </div>
+        <div class="chart-canvas-wrap">
+          <canvas></canvas>
+          <div class="chart-tooltip"></div>
+        </div>
+        <div class="chart-legend"></div>`;
+      container.appendChild(block);
+
+      const chart = new TimeChart(
+        block.querySelector('canvas'),
+        block.querySelector('.chart-tooltip'),
+        block.querySelector('.chart-legend'),
+        seriesDefs,
+      );
+      chart.setData(packets);
+      allCharts.push(chart);
+      return chart;
+    }
+
+    function initDefaultCharts() {
+      const container = document.getElementById('default-charts');
+
+      buildChartBlock(container, 'SiPM Trigger Counts', 'counts',
+        FIELD_CATALOG.filter(f => f.group === 'SiPM Trigger Counts')
+          .map((f, i) => ({ key: f.key, label: f.label, color: distinctColor(i, 16) })));
+
+      buildChartBlock(container, 'Temperatures', '°C',
+        FIELD_CATALOG.filter(f => f.group === 'Temperatures')
+          .map((f, i, arr) => ({ key: f.key, label: f.label, color: distinctColor(i, arr.length) })));
+
+      buildChartBlock(container, 'Altitude', 'm',
+        [{ key: 'altitude_m', label: 'Altitude', color: '#38bdf8' }]);
+
+      buildChartBlock(container, 'Pressure', 'mbar',
+        [{ key: 'pressure_mbar', label: 'Pressure', color: '#34d399' }]);
+
+      buildChartBlock(container, 'Magnetometer', 'µT',
+        FIELD_CATALOG.filter(f => f.group === 'Magnetometer')
+          .map((f, i) => ({ key: f.key, label: f.label, color: ['#f87171', '#34d399', '#60a5fa'][i] })));
+
+      buildChartBlock(container, 'Thresholds', 'mV',
+        FIELD_CATALOG.filter(f => f.group === 'Thresholds')
+          .map((f, i, arr) => ({ key: f.key, label: f.label, color: distinctColor(i, arr.length) })),
+        { advanced: true });
+    }
+
+    function switchView(view) {
+      const isTable = view === 'table';
+      document.getElementById('table-view').style.display = isTable ? '' : 'none';
+      document.getElementById('graphs-view').style.display = isTable ? 'none' : '';
+      document.getElementById('tab-btn-table').classList.toggle('active', isTable);
+      document.getElementById('tab-btn-graphs').classList.toggle('active', !isTable);
+      if (!isTable) allCharts.forEach(c => c.draw());
+    }
+
+    function refreshCharts() {
+      allCharts.forEach(c => c.setData(packets));
+    }
+
+    document.addEventListener('DOMContentLoaded', initDefaultCharts);
 
     // ── Decode ─────────────────────────────────────────────────────────────
 
@@ -366,6 +682,7 @@
         packets = data.packets;
         activeTr = null;
         buildTable(packets);
+        refreshCharts();
         updateHeaderStats(data);
         if (data.decoded > 0) {
           setStatus(
@@ -383,8 +700,9 @@
 
     function clearAll() {
       document.getElementById('input-area').value = '';
-      packets = []; activeTr = null;
+      packets = []; activeTr = null; currentPkt = null;
       buildTable([]);
+      refreshCharts();
       document.getElementById('detail-scroll').innerHTML =
         '<div class="empty" style="margin-top:60px">Select a packet to inspect it.</div>';
       document.getElementById('header-stats').innerHTML = '';
@@ -424,7 +742,7 @@
       }
       tbody.innerHTML = pkts.map((p, i) => `
         <tr class="${p.crc_ok ? '' : 'bad'}" onclick="pickRow(this, ${i})">
-          <td class="dim">${p.line_number}</td>
+          <td class="dim">${p.packet_number}</td>
           <td>${p.sequence_number}</td>
           <td>${fmtTs(p.timestamp_utc)}</td>
           <td style="text-align:right">${Number(p.altitude_m).toLocaleString()}</td>
@@ -440,13 +758,21 @@
       if (activeTr) activeTr.classList.remove('selected');
       tr.classList.add('selected');
       activeTr = tr;
-      buildDetail(packets[idx]);
+      currentPkt = packets[idx];
+      buildDetail(currentPkt);
     }
 
     // ── Detail ─────────────────────────────────────────────────────────────
 
+    function toggleAdvanced(checked) {
+      showAdvanced = checked;
+      if (currentPkt) buildDetail(currentPkt);
+      document.getElementById('graphs-view').classList.toggle('show-advanced', checked);
+      allCharts.forEach(c => c.draw());
+    }
+
     function buildDetail(pkt) {
-      const html = GROUPS.map(g => {
+      const html = GROUPS.filter(g => showAdvanced || !g.advanced).map(g => {
         const color = g.color ?? (pkt.crc_ok ? '#34d399' : '#f87171');
         let body = '';
 
@@ -505,6 +831,42 @@
       bar.style.color = cfg.color;
       document.getElementById('status-msg').textContent = msg;
     }
+
+    // ── Detail panel resize ─────────────────────────────────────────────────
+
+    (function initResize() {
+      const handle = document.getElementById('resize-handle');
+      const detailWrap = document.getElementById('detail-wrap');
+      const MIN_WIDTH = 260, MAX_WIDTH = 900;
+
+      const saved = parseInt(localStorage.getItem('detailPanelWidth'), 10);
+      if (saved) detailWrap.style.width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, saved)) + 'px';
+
+      let dragging = false, startX = 0, startWidth = 0;
+
+      handle.addEventListener('mousedown', (e) => {
+        dragging = true;
+        startX = e.clientX;
+        startWidth = detailWrap.getBoundingClientRect().width;
+        handle.classList.add('dragging');
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + (startX - e.clientX)));
+        detailWrap.style.width = newWidth + 'px';
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (!dragging) return;
+        dragging = false;
+        handle.classList.remove('dragging');
+        document.body.style.userSelect = '';
+        localStorage.setItem('detailPanelWidth', parseInt(detailWrap.style.width, 10));
+      });
+    })();
   </script>
 </body>
 </html>

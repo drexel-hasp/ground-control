@@ -56,19 +56,32 @@ def utc_string(timestamp_s: int) -> str:
     return datetime.fromtimestamp(timestamp_s, timezone.utc).isoformat()
 
 
-def extract_packet_from_line(line: str) -> bytes | None:
+HEX_LINE_RE = re.compile(r"^(?:(?:0x)?[0-9A-Fa-f]{2})+$")
+
+
+def extract_hex_bytes_from_line(line: str) -> bytes | None:
+    """Pull raw bytes out of one input line, stripping any DOWNLINK_HEX marker.
+
+    Returns None if the line isn't pure hex data (e.g. unrelated log text),
+    so it can be excluded from the packet stream rather than corrupting it.
+    Returns b"" for a blank line.
+    """
     payload = line.strip()
     marker_idx = payload.find("DOWNLINK_HEX")
     if marker_idx >= 0:
-        payload = payload[marker_idx + len("DOWNLINK_HEX"):]
+        payload = payload[marker_idx + len("DOWNLINK_HEX"):].strip()
 
-    hex_tokens = re.findall(r"(?:0x)?([0-9A-Fa-f]{2})", payload)
-    if len(hex_tokens) != RECORD_SIZE:
+    compact = re.sub(r"\s+", "", payload)
+    if not compact:
+        return b""
+    if not HEX_LINE_RE.match(compact):
         return None
+
+    hex_tokens = re.findall(r"(?:0x)?([0-9A-Fa-f]{2})", compact)
     return bytes(int(token, 16) for token in hex_tokens)
 
 
-def decode_packet(packet: bytes, line_number: int) -> dict[str, object]:
+def decode_packet(packet: bytes, packet_number: int) -> dict[str, object]:
     frame_ok = packet[0] == START_MARKER and packet[49] == END_MARKER
     received_crc = u16_be(packet, 47)
     calculated_crc = crc16_ccitt_false(packet[1:47])
@@ -82,7 +95,7 @@ def decode_packet(packet: bytes, line_number: int) -> dict[str, object]:
     telemetry_temp = packet[41]
 
     row: dict[str, object] = {
-        "line_number": line_number,
+        "packet_number": packet_number,
         "sequence_number": u16_be(packet, 1),
         "payload_id": packet[3],
         "timestamp_unix": u32_be(packet, 4),
@@ -121,15 +134,32 @@ def decode_packet(packet: bytes, line_number: int) -> dict[str, object]:
 
 
 def decode_text(text: str) -> tuple[list[dict], int, int]:
-    """Decode all packets from a text string. Returns (rows, decoded_count, ignored_count)."""
-    rows = []
-    ignored = 0
-    for line_number, line in enumerate(text.splitlines(), start=1):
-        packet = extract_packet_from_line(line)
-        if packet is None:
-            ignored += 1
+    """Decode all packets from a text string.
+
+    Packets don't need to be one-per-line: hex bytes from every valid hex
+    line are concatenated into a single stream and then sliced into fixed
+    RECORD_SIZE chunks. This handles the usual one-record-per-line input as
+    well as a continuous hex blob with no line breaks between records —
+    both reduce to the same underlying byte stream. Returns
+    (rows, decoded_count, ignored_count).
+    """
+    buffer = bytearray()
+    ignored_lines = 0
+    for line in text.splitlines():
+        chunk = extract_hex_bytes_from_line(line)
+        if chunk is None:
+            ignored_lines += 1
             continue
-        rows.append(decode_packet(packet, line_number))
+        buffer.extend(chunk)
+
+    full_records = len(buffer) // RECORD_SIZE
+    rows = [
+        decode_packet(bytes(buffer[i * RECORD_SIZE:(i + 1) * RECORD_SIZE]), i + 1)
+        for i in range(full_records)
+    ]
+
+    leftover = len(buffer) - full_records * RECORD_SIZE
+    ignored = ignored_lines + (1 if leftover else 0)
     return rows, len(rows), ignored
 
 

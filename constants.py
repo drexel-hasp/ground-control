@@ -3,7 +3,7 @@ START_MARKER = 0x7E
 END_MARKER = 0x7F
 
 CSV_HEADER = [
-    "line_number",
+    "packet_number",
     "sequence_number",
     "payload_id",
     "timestamp_unix",
