@@ -163,10 +163,53 @@ def decode_text(text: str) -> tuple[list[dict], int, int]:
     return rows, len(rows), ignored
 
 
+def decode_binary(data: bytes) -> tuple[list[dict], int, int]:
+    """Decode fixed-size packets from a raw binary stream.
+
+    The scan advances by a complete record after a framed packet and by one
+    byte after a false start marker. This preserves CRC-failing packets for
+    inspection while still allowing the decoder to resynchronize after
+    unrelated or damaged bytes.
+    """
+    rows: list[dict] = []
+    ignored_regions = 0
+    cursor = 0
+
+    while cursor < len(data):
+        marker = data.find(bytes([START_MARKER]), cursor)
+        if marker < 0:
+            if cursor < len(data):
+                ignored_regions += 1
+            break
+        if marker > cursor:
+            ignored_regions += 1
+        if len(data) - marker < RECORD_SIZE:
+            ignored_regions += 1
+            break
+
+        candidate = data[marker:marker + RECORD_SIZE]
+        if candidate[-1] != END_MARKER:
+            ignored_regions += 1
+            cursor = marker + 1
+            continue
+
+        rows.append(decode_packet(candidate, len(rows) + 1))
+        cursor = marker + RECORD_SIZE
+
+    return rows, len(rows), ignored_regions
+
+
+def decode_bytes(data: bytes) -> tuple[list[dict], int, int]:
+    """Decode either raw binary packets or the existing hexadecimal text."""
+    rows, decoded, ignored = decode_binary(data)
+    if decoded:
+        return rows, decoded, ignored
+    return decode_text(data.decode("utf-8", errors="replace"))
+
+
 def decode_file(input_path: Path, output_path: Path) -> tuple[int, int]:
-    """Decode packets from a file and write to CSV. Returns (decoded_count, ignored_count)."""
-    text = input_path.read_text(encoding="utf-8", errors="replace")
-    rows, decoded, ignored = decode_text(text)
+    """Decode binary or hex-text packets and write them to CSV."""
+    rows, decoded, ignored = decode_bytes(input_path.read_bytes())
 
     with output_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_HEADER)

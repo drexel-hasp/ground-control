@@ -10,7 +10,7 @@ from __future__ import annotations
 from flask import Flask, jsonify, render_template, request
 
 from constants import CSV_HEADER
-from decoder import decode_text
+from decoder import decode_bytes, decode_text
 
 app = Flask(__name__)
 
@@ -23,11 +23,10 @@ def index():
 @app.route("/decode", methods=["POST"])
 def decode():
     if "file" in request.files:
-        text = request.files["file"].read().decode("utf-8", errors="replace")
+        rows, decoded, ignored = decode_bytes(request.files["file"].read())
     else:
         text = (request.get_json(silent=True) or {}).get("text", "")
-
-    rows, decoded, ignored = decode_text(text)
+        rows, decoded, ignored = decode_text(text)
 
     for row in rows:
         row["crc_ok"] = bool(row["crc_ok"])

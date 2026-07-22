@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI: decode HASP downlink log file to CSV.
+"""CLI: decode a raw-binary or hex-text HASP downlink file to CSV.
 
 Usage:
     python cli.py input.txt
@@ -19,7 +19,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Decode HASP downlink debug byte lines to CSV."
     )
-    parser.add_argument("input", type=Path, help="Text file with packet lines")
+    parser.add_argument(
+        "input", type=Path, help="Raw binary file or text file with hex packet lines"
+    )
     parser.add_argument(
         "-o", "--output",
         type=Path,

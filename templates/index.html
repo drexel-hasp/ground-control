@@ -285,6 +285,81 @@
     }
     .legend-chip.off { color: var(--text-muted); text-decoration: line-through; opacity: .55; }
     .legend-swatch { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+
+    /* ── Mode switcher ───────────────────────────────────────────────────── */
+    .mode-bar {
+      flex-shrink: 0; display: flex; gap: 2px;
+      background: var(--bg-deep); border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+    .mode-btn {
+      background: transparent; border: none; border-bottom: 2px solid transparent;
+      color: var(--text-muted); font-family: var(--font-ui); font-size: 12px; font-weight: 600;
+      padding: 9px 14px; cursor: pointer; transition: color .1s, border-color .1s;
+    }
+    .mode-btn:hover { color: var(--text-dim); }
+    .mode-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ── Uplink command maker ────────────────────────────────────────────── */
+    .uplink-view { flex: 1; display: flex; overflow: hidden; }
+    .uplink-sidebar {
+      width: 380px; min-width: 280px; max-width: 520px; flex-shrink: 0;
+      display: flex; flex-direction: column; overflow: hidden;
+      border-right: 1px solid var(--border);
+    }
+    .uplink-search-wrap { flex-shrink: 0; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    input.uplink-search {
+      width: 100%; background: var(--bg-deep); border: 1px solid var(--border-mid);
+      border-radius: 7px; color: var(--text); font-family: var(--font-ui); font-size: 12px;
+      padding: 7px 11px; outline: none;
+    }
+    input.uplink-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56,189,248,.1); }
+    .uplink-list { flex: 1; overflow-y: auto; }
+    .uplink-cat {
+      padding: 7px 14px 4px; font-size: 9.5px; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--text-muted); background: var(--bg-base);
+      position: sticky; top: 0;
+    }
+    .uplink-item {
+      padding: 8px 14px; cursor: pointer; border-bottom: 1px solid var(--border);
+      transition: background .07s;
+    }
+    .uplink-item:hover { background: var(--bg-hover); }
+    .uplink-item.selected { background: var(--bg-selected); box-shadow: inset 3px 0 0 var(--accent); }
+    .uplink-item-name { font-size: 12px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px; }
+    .uplink-item-code { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted); font-weight: 500; }
+    .uplink-item-desc {
+      font-size: 10.5px; color: var(--text-dim); margin-top: 2px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .uplink-item-param {
+      display: inline-block; font-size: 8.5px; font-weight: 700; letter-spacing: .05em;
+      color: var(--yellow); border: 1px solid #4d3b06; background: #1a1200;
+      border-radius: 4px; padding: 1px 5px; margin-left: 4px;
+    }
+
+    .uplink-detail { flex: 1; overflow-y: auto; padding: 22px; }
+    .uplink-detail-cat { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+    .uplink-detail-title { font-size: 18px; font-weight: 700; color: #f1f5f9; margin-bottom: 8px; }
+    .uplink-detail-desc { font-size: 12.5px; color: var(--text-dim); line-height: 1.6; margin-bottom: 22px; max-width: 560px; }
+
+    .uplink-param-row { margin-bottom: 22px; }
+    .uplink-param-label { font-size: 11px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; display: block; }
+    input.uplink-param-input {
+      width: 140px; background: var(--bg-deep); border: 1px solid var(--border-mid);
+      border-radius: 7px; color: var(--accent); font-family: var(--font-mono); font-size: 14px;
+      padding: 8px 12px; outline: none;
+    }
+    input.uplink-param-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56,189,248,.1); }
+    .uplink-param-hint { font-size: 10.5px; color: var(--text-muted); margin-top: 5px; }
+
+    .uplink-result {
+      border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card-alt);
+      padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      max-width: 560px;
+    }
+    .uplink-result-bytes { font-family: var(--font-mono); font-size: 22px; font-weight: 600; color: var(--accent); letter-spacing: .04em; }
+    .copy-btn.copied { background: var(--green-bg); border-color: #064e38; color: var(--green); }
   </style>
 </head>
 
@@ -301,6 +376,14 @@
     </div>
     <div id="header-stats"></div>
   </header>
+
+  <!-- ── Mode switcher ──────────────────────────────────────────────────── -->
+  <div class="mode-bar">
+    <button class="mode-btn active" id="mode-btn-downlink" onclick="switchMode('downlink')">📡&thinsp;Downlink Decoder</button>
+    <button class="mode-btn" id="mode-btn-uplink" onclick="switchMode('uplink')">📤&thinsp;Uplink Commands</button>
+  </div>
+
+  <div id="downlink-view" style="display:contents">
 
   <!-- ── Input panel ────────────────────────────────────────────────────── -->
   <div class="input-panel">
@@ -372,6 +455,25 @@
     </div>
 
   </div><!-- /main -->
+
+  </div><!-- /downlink-view -->
+
+  <!-- ── Uplink command maker ───────────────────────────────────────────── -->
+  <div class="uplink-view" id="uplink-view" style="display:none">
+    <div class="uplink-sidebar">
+      <div class="panel-bar">
+        <span class="panel-label">Commands</span>
+      </div>
+      <div class="uplink-search-wrap">
+        <input type="text" id="uplink-search" class="uplink-search"
+          placeholder="Search commands or descriptions…" oninput="renderUplinkList()">
+      </div>
+      <div class="uplink-list" id="uplink-list"></div>
+    </div>
+    <div class="uplink-detail" id="uplink-detail">
+      <div class="empty" style="margin-top:80px">Select a command to build it.</div>
+    </div>
+  </div>
 
   <script>
     const CSV_HEADER = {{ csv_header | tojson }};
@@ -650,7 +752,180 @@
       allCharts.forEach(c => c.setData(packets));
     }
 
-    document.addEventListener('DOMContentLoaded', initDefaultCharts);
+    // ── Uplink command maker ─────────────────────────────────────────────────
+
+    const UPLINK_COMMANDS = [
+      { category: 'System & Reset Commands', name: 'Telemetry Teensy Reset', code: 0x02, fixed2: 0xFD,
+        description: 'Soft reset of the telemetry Teensy microcontroller' },
+      { category: 'System & Reset Commands', name: 'SiPM Teensy 1 Reset', code: 0x03, fixed2: 0xFC,
+        description: 'Soft reset of SiPM Teensy 1 microcontroller' },
+      { category: 'System & Reset Commands', name: 'SiPM Teensy 2 Reset', code: 0x04, fixed2: 0xFB,
+        description: 'Soft reset of SiPM Teensy 2 microcontroller' },
+      { category: 'System & Reset Commands', name: 'Reset Everything', code: 0x20, fixed2: 0xDF,
+        description: 'Full system reset of all subsystems' },
+
+      { category: 'Threshold Configuration', name: 'Set Threshold 1', code: 0x05, param: true, paramLabel: 'mV value',
+        description: 'Set trigger threshold for SiPM channel group 1 (XX = mV value)' },
+      { category: 'Threshold Configuration', name: 'Set Threshold 2', code: 0x06, param: true, paramLabel: 'mV value',
+        description: 'Set trigger threshold for SiPM channel group 2 (XX = mV value)' },
+      { category: 'Threshold Configuration', name: 'Set Threshold 3', code: 0x07, param: true, paramLabel: 'mV value',
+        description: 'Set trigger threshold for SiPM channel group 3 (XX = mV value)' },
+      { category: 'Threshold Configuration', name: 'Set Threshold 4', code: 0x08, param: true, paramLabel: 'mV value',
+        description: 'Set trigger threshold for SiPM channel group 4 (XX = mV value)' },
+      { category: 'Threshold Configuration', name: 'Enable Auto Threshold Control', code: 0x1E, fixed2: 0xE1,
+        description: 'Enable automatic threshold adjustment' },
+      { category: 'Threshold Configuration', name: 'Disable Auto Threshold Control', code: 0x1F, fixed2: 0xE0,
+        description: 'Disable automatic threshold adjustment' },
+
+      { category: 'CPU Frequency Configuration', name: 'Set Telemetry Teensy CPU Freq', code: 0x09, param: true, paramLabel: 'freq code',
+        description: 'Set telemetry Teensy clock frequency (XX = freq code)' },
+      { category: 'CPU Frequency Configuration', name: 'Set Teensy 1 CPU Freq', code: 0x0A, param: true, paramLabel: 'freq code',
+        description: 'Set SiPM Teensy 1 clock frequency (XX = freq code)' },
+      { category: 'CPU Frequency Configuration', name: 'Set Teensy 2 CPU Freq', code: 0x0B, param: true, paramLabel: 'freq code',
+        description: 'Set SiPM Teensy 2 clock frequency (XX = freq code)' },
+
+      { category: 'Fault Protection & Safety', name: 'Disable Fault Protection', code: 0x0C, fixed2: 0xF3,
+        description: 'Disable hardware fault protection circuitry' },
+      { category: 'Fault Protection & Safety', name: 'Enable Fault Protection', code: 0x0D, fixed2: 0xF2,
+        description: 'Enable hardware fault protection circuitry' },
+      { category: 'Fault Protection & Safety', name: 'Enable Watchdog Timer', code: 0x19, fixed2: 0xE6,
+        description: 'Enable software watchdog timer for auto-recovery' },
+      { category: 'Fault Protection & Safety', name: 'Disable Watchdog Timer', code: 0x1A, fixed2: 0xE5,
+        description: 'Disable software watchdog timer' },
+
+      { category: 'Thermal Control — Heaters', name: 'Disable Auto Heat Control', code: 0x0E, fixed2: 0xF1,
+        description: 'Disable automatic heater regulation' },
+      { category: 'Thermal Control — Heaters', name: 'Enable Auto Heat Control', code: 0x0F, fixed2: 0xF0,
+        description: 'Enable automatic heater regulation' },
+      { category: 'Thermal Control — Heaters', name: 'Set Power Layer Heating', code: 0x11, param: true, paramLabel: 'duty cycle',
+        description: 'Set power layer heater duty cycle (XX = 0x00–0xFF)' },
+      { category: 'Thermal Control — Heaters', name: 'Set Telemetry Layer Heating', code: 0x12, param: true, paramLabel: 'duty cycle',
+        description: 'Set telemetry layer heater duty cycle (XX = 0x00–0xFF)' },
+      { category: 'Thermal Control — Heaters', name: 'Set Signal Layer Heating', code: 0x13, param: true, paramLabel: 'duty cycle',
+        description: 'Set signal layer heater duty cycle (XX = 0x00–0xFF)' },
+      { category: 'Thermal Control — Heaters', name: 'Set SiPM Layer Heating', code: 0x14, param: true, paramLabel: 'duty cycle',
+        description: 'Set SiPM layer heater duty cycle (XX = 0x00–0xFF)' },
+
+      { category: 'Thermal Control — Fans', name: 'Set Power Layer Fan', code: 0x15, param: true, paramLabel: 'fan speed',
+        description: 'Set power layer fan speed (XX = 0x00–0xFF)' },
+      { category: 'Thermal Control — Fans', name: 'Set Telemetry Layer Fan', code: 0x16, param: true, paramLabel: 'fan speed',
+        description: 'Set telemetry layer fan speed (XX = 0x00–0xFF)' },
+      { category: 'Thermal Control — Fans', name: 'Set Signal Layer Fan', code: 0x17, param: true, paramLabel: 'fan speed',
+        description: 'Set signal layer fan speed (XX = 0x00–0xFF)' },
+      { category: 'Thermal Control — Fans', name: 'Set SiPM Layer Fan', code: 0x18, param: true, paramLabel: 'fan speed',
+        description: 'Set SiPM layer fan speed (XX = 0x00–0xFF)' },
+
+      { category: 'Data Storage', name: 'Force SD Flush', code: 0x1B, fixed2: 0xE4,
+        description: 'Force immediate write of buffered data to SD card' },
+      { category: 'Data Storage', name: 'Enable Flash Data Recording', code: 0x1C, fixed2: 0xE3,
+        description: 'Enable onboard flash data recording' },
+      { category: 'Data Storage', name: 'Disable Flash Data Recording', code: 0x1D, fixed2: 0xE2,
+        description: 'Disable onboard flash data recording' },
+    ];
+
+    let selectedUplinkCmd = null;
+
+    function hex2(n) { return n.toString(16).toUpperCase().padStart(2, '0'); }
+
+    function renderUplinkList() {
+      const q = document.getElementById('uplink-search').value.trim().toLowerCase();
+      const listEl = document.getElementById('uplink-list');
+      const categories = [...new Set(UPLINK_COMMANDS.map(c => c.category))];
+      let html = '';
+      categories.forEach(cat => {
+        const items = UPLINK_COMMANDS
+          .map((c, i) => ({ ...c, i }))
+          .filter(c => c.category === cat)
+          .filter(c => !q || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q));
+        if (!items.length) return;
+        html += `<div class="uplink-cat">${cat}</div>`;
+        html += items.map(c => `
+          <div class="uplink-item${selectedUplinkCmd === c.i ? ' selected' : ''}" onclick="selectUplinkCommand(${c.i})">
+            <div class="uplink-item-name">${c.name}
+              <span class="uplink-item-code">0x${hex2(c.code)}</span>
+              ${c.param ? '<span class="uplink-item-param">PARAM</span>' : ''}
+            </div>
+            <div class="uplink-item-desc">${c.description}</div>
+          </div>`).join('');
+      });
+      listEl.innerHTML = html || '<div class="empty" style="margin-top:40px">No commands match.</div>';
+    }
+
+    function selectUplinkCommand(i) {
+      selectedUplinkCmd = i;
+      renderUplinkList();
+      buildUplinkDetail(UPLINK_COMMANDS[i]);
+    }
+
+    function buildUplinkDetail(cmd) {
+      const detail = document.getElementById('uplink-detail');
+      const paramRow = cmd.param ? `
+        <div class="uplink-param-row">
+          <label class="uplink-param-label">${cmd.paramLabel || 'Value'} — raw byte (0–255)</label>
+          <input type="number" min="0" max="255" value="0" class="uplink-param-input" id="uplink-param-input" oninput="updateUplinkResult()">
+          <div class="uplink-param-hint">Sent as-is, 1 byte (0x00–0xFF). No unit conversion applied yet.</div>
+        </div>` : '';
+
+      detail.innerHTML = `
+        <div class="uplink-detail-cat">${cmd.category}</div>
+        <div class="uplink-detail-title">${cmd.name}</div>
+        <div class="uplink-detail-desc">${cmd.description}</div>
+        ${paramRow}
+        <div class="uplink-result">
+          <div class="uplink-result-bytes" id="uplink-result-bytes"></div>
+          <button class="btn copy-btn" id="uplink-copy-btn" onclick="copyUplinkResult()">📋&thinsp;Copy</button>
+        </div>
+      `;
+      updateUplinkResult();
+    }
+
+    function updateUplinkResult() {
+      const cmd = UPLINK_COMMANDS[selectedUplinkCmd];
+      if (!cmd) return;
+      let byte2 = cmd.fixed2;
+      if (cmd.param) {
+        const input = document.getElementById('uplink-param-input');
+        let v = parseInt(input.value, 10);
+        if (!Number.isFinite(v)) v = 0;
+        v = Math.max(0, Math.min(255, v));
+        input.value = v;
+        byte2 = v;
+      }
+      document.getElementById('uplink-result-bytes').textContent = `0x${hex2(cmd.code)} 0x${hex2(byte2)}`;
+    }
+
+    async function copyUplinkResult() {
+      const text = document.getElementById('uplink-result-bytes').textContent;
+      const btn = document.getElementById('uplink-copy-btn');
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (e) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      btn.textContent = '✓ Copied';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '📋 Copy'; btn.classList.remove('copied'); }, 1200);
+    }
+
+    function switchMode(mode) {
+      const isDownlink = mode === 'downlink';
+      document.getElementById('downlink-view').style.display = isDownlink ? 'contents' : 'none';
+      document.getElementById('uplink-view').style.display = isDownlink ? 'none' : 'flex';
+      document.getElementById('mode-btn-downlink').classList.toggle('active', isDownlink);
+      document.getElementById('mode-btn-uplink').classList.toggle('active', !isDownlink);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initDefaultCharts();
+      renderUplinkList();
+    });
 
     // ── Decode ─────────────────────────────────────────────────────────────
 
