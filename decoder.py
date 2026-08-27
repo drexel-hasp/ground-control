@@ -5,7 +5,15 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from constants import CSV_HEADER, RECORD_SIZE, START_MARKER, END_MARKER
+from constants import (
+    CSV_HEADER,
+    END_MARKER,
+    RECORD_SIZE,
+    START_MARKER,
+    STATUS_SCHEDULE,
+    STATUS_TYPE_NAMES,
+    TELEMETRY_MODULE_NAMES,
+)
 
 
 def crc16_ccitt_false(data: bytes) -> int:
@@ -32,10 +40,6 @@ def u32_be(packet: bytes, offset: int) -> int:
     return int.from_bytes(packet[offset : offset + 4], "big", signed=False)
 
 
-def s32_be(packet: bytes, offset: int) -> int:
-    return int.from_bytes(packet[offset : offset + 4], "big", signed=True)
-
-
 def temp_from_nibble(value: int) -> int:
     return (value * 10) - 60
 
@@ -54,6 +58,153 @@ def utc_string(timestamp_s: int) -> str:
     if timestamp_s == 0:
         return "0"
     return datetime.fromtimestamp(timestamp_s, timezone.utc).isoformat()
+
+
+def signed_from_unsigned(value: int, bits: int) -> int:
+    sign_bit = 1 << (bits - 1)
+    return value - (1 << bits) if value & sign_bit else value
+
+
+def status_u8s(value: int) -> tuple[int, int, int, int]:
+    return (
+        (value >> 24) & 0xFF,
+        (value >> 16) & 0xFF,
+        (value >> 8) & 0xFF,
+        value & 0xFF,
+    )
+
+
+def status_u16_pair(value: int) -> tuple[int, int]:
+    return (value >> 16) & 0xFFFF, value & 0xFFFF
+
+
+def duty_percent(raw: int) -> float:
+    return round((raw * 100.0) / 255.0, 1)
+
+
+def decoded_pairs(**items: object) -> str:
+    return "; ".join(f"{key}={value}" for key, value in items.items())
+
+
+def decode_module_mask(mask: int) -> str:
+    if mask == 0:
+        return "none"
+    names = [
+        TELEMETRY_MODULE_NAMES.get(module_id, f"module_{module_id}")
+        for module_id in sorted(TELEMETRY_MODULE_NAMES)
+        if mask & (1 << (module_id - 1))
+    ]
+    unknown = mask & ~sum(1 << (module_id - 1) for module_id in TELEMETRY_MODULE_NAMES)
+    if unknown:
+        names.append(f"unknown_bits=0x{unknown:X}")
+    return ", ".join(names)
+
+
+def decode_status(status_type: int, status_data: int, packet_number: int) -> dict[str, object]:
+    b0, b1, b2, b3 = status_u8s(status_data)
+    high, low = status_u16_pair(status_data)
+    signed_high = signed_from_unsigned(high, 16)
+    signed_low = signed_from_unsigned(low, 16)
+    expected_index = (packet_number - 1) % len(STATUS_SCHEDULE)
+    expected_type = STATUS_SCHEDULE[expected_index]
+    name = STATUS_TYPE_NAMES.get(status_type, f"Unknown 0x{status_type:02X}")
+
+    if status_type in {0x21, 0x22, 0x23, 0x31, 0x33, 0x36, 0x52, 0x53, 0x55}:
+        decoded = decoded_pairs(value=status_data)
+    elif status_type == 0x24:
+        decoded = decoded_pairs(
+            telemetry_mhz=b0 * 4,
+            sipm1_mhz=(b1 * 4 if b1 else "unavailable"),
+            sipm2_mhz=(b2 * 4 if b2 else "unavailable"),
+        )
+    elif status_type == 0x25:
+        decoded = decoded_pairs(telemetry_core_temp_c=signed_from_unsigned(status_data, 32))
+    elif status_type == 0x28:
+        decoded = decoded_pairs(reset_cause=hex(status_data))
+    elif status_type == 0x2B:
+        decoded = decoded_pairs(last_error_code=hex(status_data))
+    elif status_type == 0x2E:
+        decoded = decoded_pairs(mask=f"0x{status_data:08X}", degraded_modules=decode_module_mask(status_data))
+    elif status_type == 0x32:
+        decoded = decoded_pairs(
+            data_recorder_failures=high,
+            sd_writer_failures=low,
+        )
+    elif status_type == 0x34:
+        decoded = decoded_pairs(session_file_index=status_data)
+    elif status_type == 0x35:
+        decoded = decoded_pairs(
+            current_depth=high,
+            high_water_mark=low,
+        )
+    elif 0x3D <= status_type <= 0x40:
+        start_channel = 1 + (status_type - 0x3D) * 4
+        decoded = decoded_pairs(**{
+            f"sipm_{start_channel + idx:02d}_threshold_mv": value * 4
+            for idx, value in enumerate((b0, b1, b2, b3))
+        })
+    elif 0x41 <= status_type <= 0x48:
+        start_channel = 1 + (status_type - 0x41) * 2
+        decoded = decoded_pairs(**{
+            f"sipm_{start_channel:02d}_adc_avg": high,
+            f"sipm_{start_channel + 1:02d}_adc_avg": low,
+        })
+    elif status_type == 0x49:
+        decoded = decoded_pairs(heading_degrees=round(high / 10.0, 1), pitch_degrees=round(signed_low / 10.0, 1))
+    elif status_type == 0x4A:
+        decoded = decoded_pairs(
+            roll_degrees=round(signed_high / 10.0, 1),
+            calibration_status=b2,
+        )
+    elif status_type == 0x4B:
+        decoded = decoded_pairs(accel_x_mg=signed_high, accel_y_mg=signed_low)
+    elif status_type == 0x4C:
+        decoded = decoded_pairs(accel_z_mg=signed_high)
+    elif status_type == 0x4D:
+        decoded = decoded_pairs(
+            top_temp_c=signed_high / 100.0,
+            top_middle_temp_c=signed_low / 100.0,
+        )
+    elif status_type == 0x4E:
+        decoded = decoded_pairs(
+            middle_bottom_temp_c=signed_high / 100.0,
+            bottom_temp_c=signed_low / 100.0,
+        )
+    elif status_type == 0x4F:
+        decoded = decoded_pairs(
+            gps_temp_c=signed_high / 100.0,
+            mag_computation_temp_c=signed_low / 100.0,
+        )
+    elif status_type == 0x50:
+        decoded = decoded_pairs(
+            power_heater=f"{duty_percent(b0)}%",
+            telemetry_heater=f"{duty_percent(b1)}%",
+            signal_heater=f"{duty_percent(b2)}%",
+            sipm_heater=f"{duty_percent(b3)}%",
+        )
+    elif status_type == 0x51:
+        decoded = decoded_pairs(
+            power_fan=f"{duty_percent(b0)}%",
+            telemetry_fan=f"{duty_percent(b1)}%",
+            signal_fan=f"{duty_percent(b2)}%",
+            sipm_fan=f"{duty_percent(b3)}%",
+        )
+    elif status_type == 0x54:
+        decoded = decoded_pairs(rejected_inputs=high, complement_failures=low)
+    else:
+        decoded = decoded_pairs(raw_unsigned=status_data)
+
+    return {
+        "status_type_hex": f"0x{status_type:02X}",
+        "status_name": name,
+        "status_data_signed": signed_from_unsigned(status_data, 32),
+        "status_data_hex": f"0x{status_data:08X}",
+        "status_decoded": decoded,
+        "status_roll_index": expected_index + 1,
+        "status_expected_type": expected_type,
+        "status_expected_type_hex": f"0x{expected_type:02X}",
+        "status_schedule_ok": status_type == expected_type,
+    }
 
 
 HEX_LINE_RE = re.compile(r"^(?:(?:0x)?[0-9A-Fa-f]{2})+$")
@@ -93,6 +244,8 @@ def decode_packet(packet: bytes, packet_number: int) -> dict[str, object]:
     sipm_power_temp = packet[38]
     sipm_teensy_temp = packet[40]
     telemetry_temp = packet[41]
+    status_type = packet[42]
+    status_data = u32_be(packet, 43)
 
     row: dict[str, object] = {
         "packet_number": packet_number,
@@ -100,10 +253,10 @@ def decode_packet(packet: bytes, packet_number: int) -> dict[str, object]:
         "payload_id": packet[3],
         "timestamp_unix": u32_be(packet, 4),
         "timestamp_utc": utc_string(u32_be(packet, 4)),
-        "threshold_01_mv": packet[24],
-        "threshold_02_mv": packet[25],
-        "threshold_03_mv": packet[26],
-        "threshold_04_mv": packet[27],
+        "threshold_01_mv": packet[24] * 4,
+        "threshold_02_mv": packet[25] * 4,
+        "threshold_03_mv": packet[26] * 4,
+        "threshold_04_mv": packet[27] * 4,
         "pressure_mbar": pressure_mbar,
         "satellite_index": satellite_index,
         "satellite_count_range": satellite_range(satellite_index),
@@ -118,8 +271,9 @@ def decode_packet(packet: bytes, packet_number: int) -> dict[str, object]:
         "sipm_teensy2_temp_c": temp_from_nibble(sipm_teensy_temp & 0x0F),
         "telemetry_teensy_temp_c": temp_from_nibble((telemetry_temp >> 4) & 0x0F),
         "telemetry_board_temp_c": temp_from_nibble(telemetry_temp & 0x0F),
-        "status_type": packet[42],
-        "status_data": s32_be(packet, 43),
+        "status_type": status_type,
+        "status_data": status_data,
+        **decode_status(status_type, status_data, packet_number),
         "crc_received": f"0x{received_crc:04X}",
         "crc_calculated": f"0x{calculated_crc:04X}",
         "crc_ok": received_crc == calculated_crc,
@@ -139,7 +293,7 @@ def decode_text(text: str) -> tuple[list[dict], int, int]:
     Packets don't need to be one-per-line: hex bytes from every valid hex
     line are concatenated into a single stream and then sliced into fixed
     RECORD_SIZE chunks. This handles the usual one-record-per-line input as
-    well as a continuous hex blob with no line breaks between records —
+    well as a continuous hex blob with no line breaks between records,
     both reduce to the same underlying byte stream. Returns
     (rows, decoded_count, ignored_count).
     """
