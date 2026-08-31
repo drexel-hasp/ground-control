@@ -862,63 +862,11 @@
 
     // ── Uplink command maker ─────────────────────────────────────────────────
 
-    const uplinkBaseCommands = [
-      { category: 'System & Reset Commands', name: 'Telemetry Teensy Reset', code: 0x02, fixed2: 0xFD,
-        description: 'Soft reset of the telemetry Teensy microcontroller' },
-      { category: 'System & Reset Commands', name: 'SiPM Teensy 1 Reset', code: 0x03, fixed2: 0xFC,
-        description: 'Soft reset of SiPM Teensy 1 microcontroller' },
-      { category: 'System & Reset Commands', name: 'SiPM Teensy 2 Reset', code: 0x04, fixed2: 0xFB,
-        description: 'Soft reset of SiPM Teensy 2 microcontroller' },
-
-      { category: 'CPU Frequency Configuration', name: 'Set Telemetry Teensy CPU Freq', code: 0x09, param: true, paramLabel: 'freq code',
-        description: 'Accepted by the uplink table. Current flight firmware keeps CPU frequency fixed at 600 MHz.' },
-      { category: 'CPU Frequency Configuration', name: 'Set Teensy 1 CPU Freq', code: 0x0A, param: true, paramLabel: 'freq code',
-        description: 'Accepted by the uplink table and routed to SiPM Teensy 1. Current flight firmware keeps CPU frequency fixed at 600 MHz.' },
-      { category: 'CPU Frequency Configuration', name: 'Set Teensy 2 CPU Freq', code: 0x0B, param: true, paramLabel: 'freq code',
-        description: 'Accepted by the uplink table and routed to SiPM Teensy 2. Current flight firmware keeps CPU frequency fixed at 600 MHz.' },
-
-      { category: 'Fault Protection & Safety', name: 'Disable Fault Protection', code: 0x0C, fixed2: 0xF3,
-        description: 'Disable hardware fault protection circuitry' },
-      { category: 'Fault Protection & Safety', name: 'Enable Fault Protection', code: 0x0D, fixed2: 0xF2,
-        description: 'Enable hardware fault protection circuitry' },
-      { category: 'Fault Protection & Safety', name: 'Enable Watchdog Timer', code: 0x19, fixed2: 0xE6,
-        description: 'Enable software watchdog timer for auto-recovery' },
-      { category: 'Fault Protection & Safety', name: 'Disable Watchdog Timer', code: 0x1A, fixed2: 0xE5,
-        description: 'Disable software watchdog timer' },
-
-      { category: 'Thermal Control - Heaters', name: 'Disable Auto Heat Control', code: 0x0E, fixed2: 0xF1,
-        description: 'Disable automatic heater regulation' },
-      { category: 'Thermal Control - Heaters', name: 'Enable Auto Heat Control', code: 0x0F, fixed2: 0xF0,
-        description: 'Enable automatic heater regulation' },
-      { category: 'Thermal Control - Heaters', name: 'Set Power Layer Heating', code: 0x11, param: true, paramLabel: 'duty cycle byte',
-        description: 'Set power layer heater duty cycle (XX = 0x00-0xFF)' },
-      { category: 'Thermal Control - Heaters', name: 'Set Telemetry Layer Heating', code: 0x12, param: true, paramLabel: 'duty cycle byte',
-        description: 'Set telemetry layer heater duty cycle (XX = 0x00-0xFF)' },
-      { category: 'Thermal Control - Heaters', name: 'Set Signal Layer Heating', code: 0x13, param: true, paramLabel: 'duty cycle byte',
-        description: 'Set signal layer heater duty cycle (XX = 0x00-0xFF)' },
-      { category: 'Thermal Control - Heaters', name: 'Set SiPM Layer Heating', code: 0x14, param: true, paramLabel: 'duty cycle byte',
-        description: 'Set SiPM layer heater duty cycle (XX = 0x00-0xFF)' },
-
-      { category: 'Thermal Control - Fans', name: 'Set Power Layer Fan', code: 0x15, param: true, paramLabel: 'fan speed byte',
-        description: 'Set power layer fan speed (XX = 0x00-0xFF)' },
-      { category: 'Thermal Control - Fans', name: 'Set Telemetry Layer Fan', code: 0x16, param: true, paramLabel: 'fan speed byte',
-        description: 'Set telemetry layer fan speed (XX = 0x00-0xFF)' },
-      { category: 'Thermal Control - Fans', name: 'Set Signal Layer Fan', code: 0x17, param: true, paramLabel: 'fan speed byte',
-        description: 'Set signal layer fan speed (XX = 0x00-0xFF)' },
-      { category: 'Thermal Control - Fans', name: 'Set SiPM Layer Fan', code: 0x18, param: true, paramLabel: 'fan speed byte',
-        description: 'Set SiPM layer fan speed (XX = 0x00-0xFF)' },
-
-      { category: 'Data Storage', name: 'Force SD Flush', code: 0x1B, fixed2: 0xE4,
-        description: 'Force immediate write of buffered data to SD card' },
-      { category: 'Data Storage', name: 'Enable Flash Data Recording', code: 0x1C, fixed2: 0xE3,
-        description: 'Enable onboard flash data recording' },
-      { category: 'Data Storage', name: 'Disable Flash Data Recording', code: 0x1D, fixed2: 0xE2,
-        description: 'Disable onboard flash data recording' },
-
+    const autoThresholdCommands = [
       { category: 'Threshold Configuration', name: 'Enable Auto Threshold Control', code: 0x1E, fixed2: 0xE1,
-        description: 'Enable automatic threshold adjustment on both SiPM Teensys' },
+        description: 'Enable automatic threshold adjustment on both SiPM Teensys. Requires working command wiring to each board.' },
       { category: 'Threshold Configuration', name: 'Disable Auto Threshold Control', code: 0x1F, fixed2: 0xE0,
-        description: 'Disable automatic threshold adjustment on both SiPM Teensys' },
+        description: 'Disable automatic threshold adjustment on both SiPM Teensys before applying a persistent manual PWM command.' },
     ];
 
     const thresholdMvCommands = Array.from({ length: 16 }, (_, i) => ({
@@ -942,11 +890,11 @@
       unit: 'PWM counts',
       maxValue: 2040,
       paramLabel: 'PWM threshold',
-      description: `Set fallback PWM threshold for SiPM channel ${i + 1}. Enter PWM counts; byte 2 is round(PWM / 8).`,
+      description: `Set the current threshold PWM command for SiPM channel ${i + 1}. Disable automatic threshold control first to prevent feedback control from overwriting it. Enter PWM counts; byte 2 is round(PWM / 8).`,
     }));
 
     const UPLINK_COMMANDS = [
-      ...uplinkBaseCommands,
+      ...autoThresholdCommands,
       ...thresholdMvCommands,
       ...thresholdPwmCommands,
     ];
@@ -1011,6 +959,7 @@
           <div>
             <div class="uplink-result-bytes" id="uplink-result-bytes"></div>
             <div class="uplink-conversion-detail" id="uplink-conversion-detail"></div>
+            <div class="uplink-param-hint">Transmit these as two raw binary bytes. Do not transmit the displayed characters as ASCII text.</div>
           </div>
           <button class="btn copy-btn" id="uplink-copy-btn" onclick="copyUplinkResult()">Copy</button>
         </div>
