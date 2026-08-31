@@ -29,6 +29,7 @@ from flask import Flask, Response, abort, jsonify, render_template, request, str
 
 from constants import CSV_HEADER
 from decoder import decode_binary_increment, decode_path, decode_status, decode_text
+from quick_summary import build_quick_summary
 
 app = Flask(__name__)
 
@@ -39,8 +40,9 @@ MAX_DATASETS = 8
 DATASET_TTL_SECONDS = 6 * 60 * 60
 LIVE_HTTP_TIMEOUT_SECONDS = 20
 MAX_LIVE_FETCH_BYTES = 5 * 1024 * 1024
-DEFAULT_LIVE_INITIAL_PACKETS = 1000
-MAX_LIVE_INITIAL_PACKETS = 10000
+DEFAULT_LIVE_INITIAL_PACKETS = 20000
+MAX_LIVE_INITIAL_PACKETS = 25000
+MAX_SUMMARY_SOURCE_PACKETS = 100000
 LIVE_USER_AGENT = "HASP-Ground-Control/1.0"
 
 _cache_root = Path(tempfile.mkdtemp(prefix="hasp-ground-control-"))
@@ -417,14 +419,16 @@ def start_live():
         try:
             remote_size = int(metadata["size"])
             remote_offset = 0
+            loaded_rows: list[dict[str, object]] = []
             if remote_size:
                 start = max(0, remote_size - (initial_packets * 50 + 49))
-                _, remote_offset = _ingest_live_range(
+                loaded_rows, remote_offset = _ingest_live_range(
                     dataset_id,
                     url,
                     start,
                     remote_size - 1,
                 )
+            checked_at = time.time()
             with _datasets_lock:
                 _datasets[dataset_id].setdefault("live", {}).update(
                     {
@@ -434,7 +438,8 @@ def start_live():
                         "remote_size": remote_size,
                         "etag": metadata["etag"],
                         "last_modified": metadata["last_modified"],
-                        "last_checked": time.time(),
+                        "last_checked": checked_at,
+                        "last_packet_at": checked_at if loaded_rows else None,
                         "initial_packets": initial_packets,
                     }
                 )
@@ -507,6 +512,7 @@ def poll_live(dataset_id: str):
                     "etag": metadata["etag"],
                     "last_modified": metadata["last_modified"],
                     "last_checked": checked_at,
+                    "last_packet_at": checked_at if rows else info["live"].get("last_packet_at"),
                 }
             )
             decoded = int(info["decoded"])
@@ -547,6 +553,20 @@ def dataset_packets(dataset_id: str):
     except ValueError:
         page = 1
     return jsonify(_page_payload(dataset_id, page, _page_size()))
+
+
+@app.route("/datasets/<dataset_id>/summary")
+def dataset_summary(dataset_id: str):
+    path = _dataset_path(dataset_id)
+    with _datasets_lock:
+        live = dict(_datasets[dataset_id].get("live", {}))
+    with sqlite3.connect(path) as connection:
+        newest = connection.execute(
+            "SELECT data FROM packets ORDER BY packet_number DESC LIMIT ?",
+            (MAX_SUMMARY_SOURCE_PACKETS,),
+        ).fetchall()
+        rows = (json.loads(data) for (data,) in reversed(newest))
+        return jsonify(build_quick_summary(rows, live=live))
 
 
 @app.route("/datasets/<dataset_id>/csv")

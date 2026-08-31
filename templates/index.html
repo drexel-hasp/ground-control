@@ -317,6 +317,48 @@
     .legend-chip.off { color: var(--text-muted); text-decoration: line-through; opacity: .55; }
     .legend-swatch { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
 
+    /* ── Quick summary ──────────────────────────────────────────────────── */
+    .summary-view { flex: 1; overflow-y: auto; padding: 14px; }
+    .summary-empty { color: var(--text-muted); text-align: center; padding: 70px 20px; }
+    .summary-alerts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .summary-alert {
+      flex: 1 1 260px; padding: 10px 12px; border: 1px solid; border-radius: 8px;
+      background: var(--bg-card); display: flex; gap: 9px; align-items: flex-start;
+    }
+    .summary-alert.ok { border-color: #065f46; background: var(--green-bg); }
+    .summary-alert.warning { border-color: #6b4f08; background: #1a1200; }
+    .summary-alert.danger { border-color: #7f1d1d; background: var(--red-bg); }
+    .summary-alert-code { font-size: 10px; font-weight: 800; letter-spacing: .07em; white-space: nowrap; }
+    .summary-alert.ok .summary-alert-code { color: var(--green); }
+    .summary-alert.warning .summary-alert-code { color: var(--yellow); }
+    .summary-alert.danger .summary-alert-code { color: var(--red); }
+    .summary-alert-detail { color: var(--text-dim); font-size: 10.5px; line-height: 1.35; }
+    .summary-kpis { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .summary-kpi { border: 1px solid var(--border); border-radius: 8px; padding: 11px 12px; background: var(--bg-card-alt); }
+    .summary-kpi-label { color: var(--text-muted); font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+    .summary-kpi-value { color: var(--text); font-family: var(--font-mono); font-size: 18px; font-weight: 600; margin-top: 5px; }
+    .summary-kpi-note { color: var(--text-muted); font-size: 9.5px; margin-top: 4px; line-height: 1.4; }
+    .summary-grid { display: grid; grid-template-columns: minmax(500px, 1.35fr) minmax(340px, 1fr); gap: 12px; align-items: start; }
+    .summary-stack { display: flex; flex-direction: column; gap: 12px; }
+    .summary-card { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--bg-card-alt); }
+    .summary-card-head { padding: 8px 12px; background: var(--bg-card); border-bottom: 1px solid var(--border); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-dim); }
+    .summary-card-note { padding: 7px 12px; color: var(--text-muted); font-size: 9.5px; border-top: 1px solid var(--border); }
+    .summary-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 10.5px; }
+    .summary-table th, .summary-table td { padding: 6px 9px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+    .summary-table th { color: var(--text-muted); font-size: 9px; letter-spacing: .05em; background: var(--bg-deep); }
+    .summary-table th:first-child, .summary-table td:first-child { text-align: left; }
+    .summary-table tr:last-child td { border-bottom: none; }
+    .summary-table .board-row td { color: var(--accent); font-weight: 600; background: rgba(19,33,64,.55); }
+    .summary-health { padding: 10px 12px; }
+    .summary-health-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .summary-health-row:last-child { border-bottom: none; }
+    .summary-health-name { color: var(--text); font-family: var(--font-mono); font-size: 10.5px; }
+    .summary-health-value { color: var(--text-dim); font-family: var(--font-mono); font-size: 10px; text-align: right; }
+    @media (max-width: 1100px) {
+      .summary-kpis { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
+      .summary-grid { grid-template-columns: 1fr; }
+    }
+
     /* ── Mode switcher ───────────────────────────────────────────────────── */
     .mode-bar {
       flex-shrink: 0; display: flex; gap: 2px;
@@ -454,10 +496,10 @@
           <option value="120">Every 2 min</option>
         </select>
         <select class="live-select" id="live-history" title="Recent packets loaded when starting">
-          <option value="500">Latest 500</option>
-          <option value="1000" selected>Latest 1,000</option>
-          <option value="2500">Latest 2,500</option>
-          <option value="5000">Latest 5,000</option>
+          <option value="5000">Latest 5,000 (~17 min)</option>
+          <option value="10000">Latest 10,000 (~33 min)</option>
+          <option value="20000" selected>Latest 20,000 (~67 min)</option>
+          <option value="25000">Latest 25,000 (~83 min)</option>
         </select>
         <button class="btn" id="live-start" onclick="startLive()">Start</button>
         <button class="btn" id="live-stop" onclick="stopLive()" disabled>Stop</button>
@@ -489,6 +531,7 @@
         <div class="view-tabs">
           <button class="tab-btn active" id="tab-btn-table" onclick="switchView('table')">Packets</button>
           <button class="tab-btn" id="tab-btn-graphs" onclick="switchView('graphs')">Graphs</button>
+          <button class="tab-btn" id="tab-btn-summary" onclick="switchView('summary')">Quick Summary</button>
         </div>
         <button class="btn" style="min-width:0;padding:4px 11px;font-size:11px" onclick="downloadCsv()">
           ⬇&thinsp;Download CSV
@@ -522,6 +565,9 @@
       </div>
       <div class="graphs-view" id="graphs-view" style="display:none">
         <div class="chart-grid" id="default-charts"></div>
+      </div>
+      <div class="summary-view" id="summary-view" style="display:none">
+        <div class="summary-empty">Decode packets or start live monitoring to build the restart-decision summary.</div>
       </div>
     </div>
 
@@ -598,6 +644,8 @@
     let packets = [];
     let chartPackets = [];
     let datasetId = null;
+    let quickSummary = null;
+    let activeView = 'table';
     let currentPage = 1;
     let pageCount = 1;
     let pageSize = 100;
@@ -847,17 +895,133 @@
     }
 
     function switchView(view) {
+      activeView = view;
       const isTable = view === 'table';
+      const isGraphs = view === 'graphs';
+      const isSummary = view === 'summary';
       document.getElementById('table-view').style.display = isTable ? '' : 'none';
       document.getElementById('pagination-bar').style.display = isTable && datasetId ? 'flex' : 'none';
-      document.getElementById('graphs-view').style.display = isTable ? 'none' : '';
+      document.getElementById('graphs-view').style.display = isGraphs ? '' : 'none';
+      document.getElementById('summary-view').style.display = isSummary ? '' : 'none';
+      document.getElementById('resize-handle').style.display = isSummary ? 'none' : '';
+      document.getElementById('detail-wrap').style.display = isSummary ? 'none' : 'flex';
       document.getElementById('tab-btn-table').classList.toggle('active', isTable);
-      document.getElementById('tab-btn-graphs').classList.toggle('active', !isTable);
-      if (!isTable) allCharts.forEach(c => c.draw());
+      document.getElementById('tab-btn-graphs').classList.toggle('active', isGraphs);
+      document.getElementById('tab-btn-summary').classList.toggle('active', isSummary);
+      if (isGraphs) allCharts.forEach(c => c.draw());
+      if (isSummary && datasetId) loadSummary();
     }
 
     function refreshCharts() {
       allCharts.forEach(c => c.setData(chartPackets));
+    }
+
+    function summaryDuration(seconds) {
+      if (seconds === null || seconds === undefined) return '—';
+      seconds = Math.max(0, Number(seconds));
+      if (seconds < 60) return `${Math.round(seconds)} s`;
+      if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+      return `${Math.floor(seconds / 3600)}h ${Math.round((seconds % 3600) / 60)}m`;
+    }
+
+    function summaryNumber(value, digits = 0) {
+      if (value === null || value === undefined || !Number.isFinite(Number(value))) return '—';
+      return Number(value).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    }
+
+    function summaryRate(value) {
+      if (value === null || value === undefined) return '—';
+      const rate = Number(value);
+      return rate < 0.01 && rate > 0 ? rate.toFixed(4) : rate.toFixed(2);
+    }
+
+    async function loadSummary() {
+      if (!datasetId) return;
+      const requestedDataset = datasetId;
+      const target = document.getElementById('summary-view');
+      if (!quickSummary) target.innerHTML = '<div class="summary-empty">Calculating summary from valid packets…</div>';
+      try {
+        const data = await jsonResponse(await fetch(`/datasets/${requestedDataset}/summary`));
+        if (datasetId !== requestedDataset) return;
+        quickSummary = data;
+        renderSummary(data);
+      } catch (e) {
+        if (datasetId === requestedDataset) {
+          target.innerHTML = `<div class="summary-empty">Could not build summary: ${escHtml(e.message)}</div>`;
+        }
+      }
+    }
+
+    function renderSummary(data) {
+      const target = document.getElementById('summary-view');
+      if (!data.available) {
+        target.innerHTML = '<div class="summary-empty">No valid CRC-protected packets are available.</div>';
+        return;
+      }
+      const labels = ['5m', '10m', '30m', '1h'];
+      const five = data.windows['5m'];
+      const coverageNote = `5-minute view contains ${summaryDuration(five.coverage_seconds)} of data`;
+      const alerts = data.alerts.map(alert => `
+        <div class="summary-alert ${alert.level}">
+          <div class="summary-alert-code">${escHtml(alert.code)}</div>
+          <div class="summary-alert-detail">${escHtml(alert.detail)}</div>
+        </div>`).join('');
+
+      const rateCells = values => labels.map(label => `<td>${summaryRate(values(label))}</td>`).join('');
+      let triggerRows = `
+        <tr class="board-row"><td>SiPM Teensy 2 · Ch 1–8</td>${rateCells(label => data.windows[label].board_rates_hz[1])}</tr>
+        <tr class="board-row"><td>SiPM Teensy 1 · Ch 9–16</td>${rateCells(label => data.windows[label].board_rates_hz[0])}</tr>`;
+      for (let channel = 1; channel <= 16; channel++) {
+        triggerRows += `<tr><td>Channel ${String(channel).padStart(2, '0')}</td>${rateCells(label => data.windows[label].trigger_rates_hz[channel - 1])}</tr>`;
+      }
+
+      const deltaCell = (value) => value === null || value === undefined ? '—' : summaryNumber(value);
+      const storageRows = labels.map(label => {
+        const item = data.storage.windows[label];
+        return `<tr><td>${label}</td><td>${deltaCell(item.records_delta)}</td><td>${deltaCell(item.data_recorder_failures_delta)}</td><td>${deltaCell(item.sd_writer_failures_delta)}</td><td>${deltaCell(item.overflows_delta)}</td></tr>`;
+      }).join('');
+      const uplinkRows = labels.map(label => {
+        const item = data.uplink.windows[label];
+        return `<tr><td>${label}</td><td>${deltaCell(item.accepted_delta)}</td><td>${deltaCell(item.rejected_delta)}</td><td>${deltaCell(item.complement_failures_delta)}</td></tr>`;
+      }).join('');
+
+      const degradedRows = data.degraded_modules.length
+        ? data.degraded_modules.map(module => `
+            <div class="summary-health-row">
+              <span class="summary-health-name">${escHtml(module.name)}${module.current ? ' · DEGRADED NOW' : ''}</span>
+              <span class="summary-health-value">5m ${summaryNumber(module.persistence_percent['5m'], 1)}% · 30m ${summaryNumber(module.persistence_percent['30m'], 1)}%</span>
+            </div>`).join('')
+        : '<div class="summary-health-row"><span class="summary-health-name">No critical module degradation reported</span><span class="summary-health-value">—</span></div>';
+      const errorRow = data.last_error
+        ? `<div class="summary-health-row"><span class="summary-health-name">Last error: ${escHtml(data.last_error.module_name)} · code ${data.last_error.code}</span><span class="summary-health-value">last reported ${summaryDuration(data.last_error.last_seen_age_seconds)} ago</span></div>`
+        : '<div class="summary-health-row"><span class="summary-health-name">No last-error value reported</span><span class="summary-health-value">—</span></div>';
+
+      const packetAgeValue = data.last_packet_age_seconds === null ? `Seq ${data.latest_sequence}` : summaryDuration(data.last_packet_age_seconds);
+      const packetAgeLabel = data.last_packet_age_seconds === null ? 'Latest valid packet' : 'Time since valid packet';
+      const progressText = data.storage.last_progress_age_seconds === null
+        ? 'No counter change visible in loaded history'
+        : `last observed increase ${summaryDuration(data.storage.last_progress_age_seconds)} ago`;
+
+      target.innerHTML = `
+        <div class="summary-alerts">${alerts}</div>
+        <div class="summary-kpis">
+          <div class="summary-kpi"><div class="summary-kpi-label">${packetAgeLabel}</div><div class="summary-kpi-value">${packetAgeValue}</div><div class="summary-kpi-note">5m valid rate ${summaryRate(five.packet_rate_hz)} / 5.00 Hz · ${summaryNumber(five.missing_percent, 2)}% missing</div></div>
+          <div class="summary-kpi"><div class="summary-kpi-label">Payload uptime</div><div class="summary-kpi-value">${summaryDuration(data.uptime_seconds)}</div><div class="summary-kpi-note">${data.recent_restart ? 'Restart detected within the last 5 minutes' : 'No restart detected within the last 5 minutes'}</div></div>
+          <div class="summary-kpi"><div class="summary-kpi-label">SD recording</div><div class="summary-kpi-value">${summaryNumber(data.storage.records_written)} records</div><div class="summary-kpi-note">${progressText} · ${summaryNumber(data.storage.free_mb)} MB free</div></div>
+          <div class="summary-kpi"><div class="summary-kpi-label">Uplink totals</div><div class="summary-kpi-value">${summaryNumber(data.uplink.accepted)} accepted</div><div class="summary-kpi-note">${summaryNumber(data.uplink.rejected)} rejected · ${summaryNumber(data.uplink.complement_failures)} complement failures</div></div>
+        </div>
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-card-head">Downlinked trigger rate · events/second</div>
+            <table class="summary-table"><thead><tr><th>Source</th><th>5 min</th><th>10 min</th><th>30 min</th><th>1 hour</th></tr></thead><tbody>${triggerRows}</tbody></table>
+            <div class="summary-card-note">${coverageNote}. Rates are lower bounds when downlink packets are missing. Board ownership follows flight firmware: Teensy 2 owns channels 1–8; Teensy 1 owns 9–16.</div>
+          </div>
+          <div class="summary-stack">
+            <div class="summary-card"><div class="summary-card-head">Storage changes</div><table class="summary-table"><thead><tr><th>Window</th><th>Records</th><th>Recorder fail</th><th>Writer fail</th><th>Overflow</th></tr></thead><tbody>${storageRows}</tbody></table><div class="summary-card-note">Current buffer depth ${summaryNumber(data.storage.ring_depth)} · high-water ${summaryNumber(data.storage.ring_high_water)} · total overflows ${summaryNumber(data.storage.overflows)}</div></div>
+            <div class="summary-card"><div class="summary-card-head">Critical firmware health</div><div class="summary-health">${degradedRows}${errorRow}</div></div>
+            <div class="summary-card"><div class="summary-card-head">Uplink changes</div><table class="summary-table"><thead><tr><th>Window</th><th>Accepted</th><th>Rejected</th><th>Complement</th></tr></thead><tbody>${uplinkRows}</tbody></table></div>
+          </div>
+        </div>`;
     }
 
     // ── Uplink command maker ─────────────────────────────────────────────────
@@ -1099,6 +1263,8 @@
         updatePagination();
         refreshCharts();
         updateHeaderStats(data);
+        quickSummary = null;
+        loadSummary();
         setLiveUi(true, `Watching · ${formatBytes(data.live.remote_size)}`);
         setStatus(
           `Live monitoring started with ${decodedCount.toLocaleString()} recent packet(s). ` +
@@ -1171,6 +1337,7 @@
         pageCount = Math.max(1, Math.ceil(decodedCount / pageSize));
         updatePagination();
         updateHeaderStats(data);
+        if (data.caught_up) loadSummary();
         setLiveUi(true, `Watching · ${formatBytes(data.remote_size)}`);
         const resetMessage = data.reset ? ' Remote file restarted; the old live window was cleared.' : '';
         setStatus(
@@ -1232,6 +1399,8 @@
         updatePagination();
         refreshCharts();
         updateHeaderStats(data);
+        quickSummary = null;
+        loadSummary();
         if (data.decoded > 0) {
           setStatus(
             `Decoded ${data.decoded} packet(s).` +
@@ -1292,7 +1461,7 @@
       stopLive(false);
       if (datasetId) fetch(`/datasets/${datasetId}`, { method: 'DELETE' }).catch(() => {});
       document.getElementById('input-area').value = '';
-      packets = []; chartPackets = []; datasetId = null;
+      packets = []; chartPackets = []; datasetId = null; quickSummary = null;
       currentPage = 1; pageCount = 1; decodedCount = 0;
       activeTr = null; currentPkt = null;
       buildTable([]);
@@ -1301,6 +1470,8 @@
       document.getElementById('detail-scroll').innerHTML =
         '<div class="empty" style="margin-top:60px">Select a packet to inspect it.</div>';
       document.getElementById('header-stats').innerHTML = '';
+      document.getElementById('summary-view').innerHTML =
+        '<div class="summary-empty">Decode packets or start live monitoring to build the restart-decision summary.</div>';
       setStatus('Ready — paste data or open a file, then click Decode.', 'idle');
     }
 

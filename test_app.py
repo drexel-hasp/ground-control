@@ -20,7 +20,21 @@ class DatasetApiTests(unittest.TestCase):
         self.assertIn(b'id="pagination-bar"', response.data)
         self.assertIn(b'id="live-url"', response.data)
         self.assertIn(b'id="live-interval"', response.data)
+        self.assertIn(b'id="tab-btn-summary"', response.data)
         self.assertIn(b"newest packets first", response.data)
+
+    def test_summary_endpoint_uses_decoded_dataset(self) -> None:
+        capture = b"".join(make_packet(i) for i in range(1, 101))
+        decoded = self.client.post(
+            "/decode", data={"file": (io.BytesIO(capture), "capture.bin")}
+        ).get_json()
+
+        response = self.client.get(f"/datasets/{decoded['dataset_id']}/summary")
+        summary = response.get_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(summary["available"])
+        self.assertEqual(summary["latest_sequence"], 100)
 
     def test_large_upload_opens_on_newest_page_and_pages_backwards(self) -> None:
         capture = b"".join(make_packet(i) for i in range(1, 251))
