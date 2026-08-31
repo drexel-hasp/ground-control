@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import csv
+import mmap
 import re
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -353,12 +355,114 @@ def decode_binary(data: bytes) -> tuple[list[dict], int, int]:
     return rows, len(rows), ignored_regions
 
 
+def decode_binary_increment(
+    data: bytes,
+    next_packet_number: int,
+) -> tuple[list[dict[str, object]], int, bytes]:
+    """Decode the complete binary records currently available in ``data``.
+
+    This is the stateful-friendly form used by live HTTP polling. It returns
+    any incomplete record tail so the caller can prepend it to the next byte
+    range, rather than treating a packet split across requests as corrupt.
+    """
+    rows: list[dict[str, object]] = []
+    ignored_regions = 0
+    cursor = 0
+    pending = b""
+
+    while cursor < len(data):
+        marker = data.find(bytes([START_MARKER]), cursor)
+        if marker < 0:
+            if cursor < len(data):
+                ignored_regions += 1
+            break
+        if marker > cursor:
+            ignored_regions += 1
+        if len(data) - marker < RECORD_SIZE:
+            pending = data[marker:]
+            break
+
+        candidate = data[marker : marker + RECORD_SIZE]
+        if candidate[-1] != END_MARKER:
+            ignored_regions += 1
+            cursor = marker + 1
+            continue
+
+        rows.append(decode_packet(candidate, next_packet_number + len(rows)))
+        cursor = marker + RECORD_SIZE
+
+    return rows, ignored_regions, pending
+
+
 def decode_bytes(data: bytes) -> tuple[list[dict], int, int]:
     """Decode either raw binary packets or the existing hexadecimal text."""
     rows, decoded, ignored = decode_binary(data)
     if decoded:
         return rows, decoded, ignored
     return decode_text(data.decode("utf-8", errors="replace"))
+
+
+def decode_path(
+    input_path: Path,
+    on_row: Callable[[dict[str, object]], None],
+) -> tuple[int, int]:
+    """Decode a file incrementally and send each row to ``on_row``.
+
+    Binary input is scanned through a memory map, so even very large captures
+    do not need to be copied into Python memory. Hex-text input is consumed a
+    line at a time and retains only an incomplete record between lines.
+    """
+    decoded = 0
+    ignored = 0
+
+    if input_path.stat().st_size:
+        with input_path.open("rb") as source:
+            with mmap.mmap(source.fileno(), 0, access=mmap.ACCESS_READ) as data:
+                cursor = 0
+                while cursor < len(data):
+                    marker = data.find(bytes([START_MARKER]), cursor)
+                    if marker < 0:
+                        if cursor < len(data):
+                            ignored += 1
+                        break
+                    if marker > cursor:
+                        ignored += 1
+                    if len(data) - marker < RECORD_SIZE:
+                        ignored += 1
+                        break
+
+                    candidate = data[marker : marker + RECORD_SIZE]
+                    if candidate[-1] != END_MARKER:
+                        ignored += 1
+                        cursor = marker + 1
+                        continue
+
+                    decoded += 1
+                    on_row(decode_packet(candidate, decoded))
+                    cursor = marker + RECORD_SIZE
+
+    if decoded:
+        return decoded, ignored
+
+    # No binary frames were found. Re-scan as the existing hexadecimal text
+    # format without holding the complete file or decoded row set in memory.
+    ignored = 0
+    buffer = bytearray()
+    with input_path.open("r", encoding="utf-8", errors="replace") as source:
+        for line in source:
+            chunk = extract_hex_bytes_from_line(line)
+            if chunk is None:
+                ignored += 1
+                continue
+            buffer.extend(chunk)
+            while len(buffer) >= RECORD_SIZE:
+                decoded += 1
+                on_row(decode_packet(bytes(buffer[:RECORD_SIZE]), decoded))
+                del buffer[:RECORD_SIZE]
+
+    if buffer:
+        ignored += 1
+    return decoded, ignored
 
 
 def decode_file(input_path: Path, output_path: Path) -> tuple[int, int]:

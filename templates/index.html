@@ -82,8 +82,9 @@
       background: var(--bg-base); border-bottom: 1px solid var(--border);
       padding: 10px 24px; display: flex; gap: 10px; align-items: flex-start;
     }
+    .input-source { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
     textarea#input-area {
-      flex: 1; min-width: 0;
+      width: 100%; min-width: 0;
       background: var(--bg-deep); border: 1px solid var(--border-mid);
       border-radius: 7px; color: #4ade80;
       font-family: var(--font-mono); font-size: 11px; line-height: 1.65;
@@ -95,6 +96,24 @@
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(56,189,248,.1);
     }
+    .live-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+    .live-label {
+      color: var(--red); font-size: 9px; font-weight: 800; letter-spacing: .12em;
+      border: 1px solid #6b1414; background: var(--red-bg); border-radius: 5px; padding: 5px 7px;
+    }
+    .live-url {
+      flex: 1; min-width: 180px; background: var(--bg-deep); border: 1px solid var(--border-mid);
+      border-radius: 6px; color: var(--text); font-family: var(--font-mono); font-size: 10px;
+      padding: 6px 9px; outline: none;
+    }
+    .live-url:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(56,189,248,.1); }
+    .live-select {
+      background: var(--bg-card); border: 1px solid var(--border-mid); border-radius: 5px;
+      color: var(--text-dim); padding: 5px 6px; font-size: 10px;
+    }
+    .live-state { color: var(--text-muted); font-size: 10px; white-space: nowrap; min-width: 85px; }
+    .live-state.active { color: var(--green); }
+    .live-state.active::before { content: '●'; margin-right: 5px; }
     .btn-col { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
     .btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 5px;
@@ -137,7 +156,19 @@
       font-size: 10px; font-weight: 700; letter-spacing: .12em;
       text-transform: uppercase; color: var(--text-muted);
     }
-    .table-scroll { flex: 1; overflow: auto; }
+    .table-scroll { flex: 1; overflow: auto; min-height: 0; }
+    .pagination-bar {
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 6px;
+      min-height: 40px; padding: 6px 12px; border-top: 1px solid var(--border);
+      background: var(--bg-deep); color: var(--text-dim); font-size: 11px;
+    }
+    .pagination-bar .btn { min-width: 0; padding: 4px 9px; font-size: 10px; }
+    .pagination-bar .btn:disabled { opacity: .35; cursor: default; }
+    .page-summary { min-width: 170px; text-align: center; font-family: var(--font-mono); }
+    .page-size {
+      margin-left: 8px; background: var(--bg-card); border: 1px solid var(--border-mid);
+      border-radius: 5px; color: var(--text); padding: 3px 6px; font-size: 10px;
+    }
 
     table#packet-table { width: 100%; border-collapse: collapse; }
     table#packet-table thead th {
@@ -408,8 +439,31 @@
 
   <!-- ── Input panel ────────────────────────────────────────────────────── -->
   <div class="input-panel">
-    <textarea id="input-area"
-      placeholder="Paste raw downlink lines here  (DOWNLINK_HEX …  or bare 50-byte hex) …"></textarea>
+    <div class="input-source">
+      <textarea id="input-area"
+        placeholder="Paste raw downlink lines here  (DOWNLINK_HEX …  or bare 50-byte hex) …"></textarea>
+      <div class="live-row">
+        <span class="live-label">LIVE</span>
+        <input class="live-url" id="live-url" type="url"
+          placeholder="https://…/current-flight.log"
+          value="https://laspace.lsu.edu/HASP_data/2026/FLIGHT/pyld10_260830_170301.log">
+        <select class="live-select" id="live-interval" title="Polling interval">
+          <option value="15">Every 15 sec</option>
+          <option value="30" selected>Every 30 sec</option>
+          <option value="60">Every minute</option>
+          <option value="120">Every 2 min</option>
+        </select>
+        <select class="live-select" id="live-history" title="Recent packets loaded when starting">
+          <option value="500">Latest 500</option>
+          <option value="1000" selected>Latest 1,000</option>
+          <option value="2500">Latest 2,500</option>
+          <option value="5000">Latest 5,000</option>
+        </select>
+        <button class="btn" id="live-start" onclick="startLive()">Start</button>
+        <button class="btn" id="live-stop" onclick="stopLive()" disabled>Stop</button>
+        <span class="live-state" id="live-state">Not running</span>
+      </div>
+    </div>
     <div class="btn-col">
       <button class="btn btn-primary" onclick="decodeInput()">▶&thinsp;Decode</button>
       <label class="btn" style="cursor:pointer">
@@ -452,6 +506,19 @@
             <tr><td colspan="8" class="empty">No packets decoded yet.</td></tr>
           </tbody>
         </table>
+      </div>
+      <div class="pagination-bar" id="pagination-bar" style="display:none">
+        <button class="btn" id="page-newest" onclick="loadPage(1)">Newest</button>
+        <button class="btn" id="page-newer" onclick="loadPage(currentPage - 1)">‹ Newer</button>
+        <span class="page-summary" id="page-summary">Page 1 of 1</span>
+        <button class="btn" id="page-older" onclick="loadPage(currentPage + 1)">Older ›</button>
+        <button class="btn" id="page-oldest" onclick="loadPage(pageCount)">Oldest</button>
+        <select class="page-size" id="page-size" onchange="changePageSize(this.value)" title="Rows per page">
+          <option value="50">50 rows</option>
+          <option value="100" selected>100 rows</option>
+          <option value="250">250 rows</option>
+          <option value="500">500 rows</option>
+        </select>
       </div>
       <div class="graphs-view" id="graphs-view" style="display:none">
         <div class="chart-grid" id="default-charts"></div>
@@ -529,6 +596,16 @@
     };
 
     let packets = [];
+    let chartPackets = [];
+    let datasetId = null;
+    let currentPage = 1;
+    let pageCount = 1;
+    let pageSize = 100;
+    let decodedCount = 0;
+    let liveTimer = null;
+    let livePollInFlight = false;
+    let liveActive = false;
+    const MAX_LIVE_CHART_POINTS = 2000;
     let activeTr = null;
     let currentPkt = null;
     let showAdvanced = false;
@@ -730,7 +807,7 @@
         block.querySelector('.chart-legend'),
         seriesDefs,
       );
-      chart.setData(packets);
+      chart.setData(chartPackets);
       allCharts.push(chart);
       return chart;
     }
@@ -772,6 +849,7 @@
     function switchView(view) {
       const isTable = view === 'table';
       document.getElementById('table-view').style.display = isTable ? '' : 'none';
+      document.getElementById('pagination-bar').style.display = isTable && datasetId ? 'flex' : 'none';
       document.getElementById('graphs-view').style.display = isTable ? 'none' : '';
       document.getElementById('tab-btn-table').classList.toggle('active', isTable);
       document.getElementById('tab-btn-graphs').classList.toggle('active', !isTable);
@@ -779,7 +857,7 @@
     }
 
     function refreshCharts() {
-      allCharts.forEach(c => c.setData(packets));
+      allCharts.forEach(c => c.setData(chartPackets));
     }
 
     // ── Uplink command maker ─────────────────────────────────────────────────
@@ -1003,6 +1081,166 @@
 
     // ── Decode ─────────────────────────────────────────────────────────────
 
+    async function jsonResponse(resp) {
+      let data = {};
+      try { data = await resp.json(); } catch (_) {}
+      if (!resp.ok) throw new Error(data.error || `Server error ${resp.status}`);
+      return data;
+    }
+
+    function setLiveUi(active, message) {
+      liveActive = active;
+      document.getElementById('live-start').disabled = active;
+      document.getElementById('live-stop').disabled = !active;
+      const state = document.getElementById('live-state');
+      state.textContent = message;
+      state.classList.toggle('active', active);
+    }
+
+    function formatBytes(value) {
+      const bytes = Number(value) || 0;
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    function capLiveChartData(rows) {
+      if (rows.length <= MAX_LIVE_CHART_POINTS) return rows;
+      const result = [];
+      for (let i = 0; i < MAX_LIVE_CHART_POINTS; i++) {
+        const index = Math.round((i * (rows.length - 1)) / (MAX_LIVE_CHART_POINTS - 1));
+        result.push(rows[index]);
+      }
+      return result;
+    }
+
+    async function startLive() {
+      const url = document.getElementById('live-url').value.trim();
+      if (!url) { setStatus('Enter a live log URL.', 'warn'); return; }
+      const initialPackets = Number(document.getElementById('live-history').value) || 1000;
+      const intervalSeconds = Number(document.getElementById('live-interval').value) || 30;
+      const previousDatasetId = datasetId;
+
+      stopLive(false);
+      document.getElementById('live-start').disabled = true;
+      document.getElementById('live-stop').disabled = true;
+      document.getElementById('live-state').textContent = 'Connecting…';
+      setStatus('Connecting to live log and loading its recent tail…', 'info');
+
+      try {
+        const resp = await fetch(`/live/start?page_size=${pageSize}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, initial_packets: initialPackets }),
+        });
+        const data = await jsonResponse(resp);
+        datasetId = data.dataset_id;
+        if (previousDatasetId && previousDatasetId !== datasetId) {
+          fetch(`/datasets/${previousDatasetId}`, { method: 'DELETE' }).catch(() => {});
+        }
+        packets = data.packets;
+        chartPackets = data.chart_packets || [];
+        currentPage = data.page;
+        pageCount = data.page_count;
+        pageSize = data.page_size;
+        decodedCount = data.decoded;
+        activeTr = null;
+        currentPkt = null;
+        buildTable(packets);
+        updatePagination();
+        refreshCharts();
+        updateHeaderStats(data);
+        setLiveUi(true, `Watching · ${formatBytes(data.live.remote_size)}`);
+        setStatus(
+          `Live monitoring started with ${decodedCount.toLocaleString()} recent packet(s). ` +
+          `Only new bytes will be fetched every ${intervalSeconds} seconds.`,
+          'ok');
+        liveTimer = setInterval(pollLive, intervalSeconds * 1000);
+      } catch (e) {
+        setLiveUi(false, 'Connection failed');
+        setStatus(`Live URL error: ${e.message}`, 'error');
+      }
+    }
+
+    function stopLive(showStatus = true) {
+      const liveDatasetId = datasetId;
+      if (liveTimer) clearInterval(liveTimer);
+      liveTimer = null;
+      const wasActive = liveActive;
+      setLiveUi(false, 'Not running');
+      if (wasActive && liveDatasetId) {
+        fetch(`/datasets/${liveDatasetId}/live/stop`, { method: 'POST' }).catch(() => {});
+      }
+      if (showStatus && wasActive) setStatus('Live monitoring stopped. Loaded data is still available.', 'idle');
+    }
+
+    async function pollLive() {
+      if (!liveActive || !datasetId || livePollInFlight) return;
+      const pollingDatasetId = datasetId;
+      livePollInFlight = true;
+      try {
+        const data = await jsonResponse(await fetch(`/datasets/${pollingDatasetId}/poll`, { method: 'POST' }));
+        if (!liveActive || datasetId !== pollingDatasetId) return;
+
+        const newRows = data.new_packets || [];
+        const wasOnNewestPage = currentPage === 1;
+        if (data.reset) {
+          packets = [];
+          chartPackets = [];
+        }
+        if (newRows.length && wasOnNewestPage) {
+          packets = [...newRows.slice().reverse(), ...packets].slice(0, pageSize);
+          chartPackets = capLiveChartData([...chartPackets, ...newRows]);
+          currentPage = 1;
+          activeTr = null;
+          currentPkt = null;
+          buildTable(packets);
+          refreshCharts();
+          document.getElementById('detail-scroll').innerHTML =
+            '<div class="empty" style="margin-top:60px">Select a packet to inspect it.</div>';
+          document.getElementById('table-view').scrollTop = 0;
+        } else if (newRows.length) {
+          const latest = await jsonResponse(await fetch(
+            `/datasets/${pollingDatasetId}/packets?page=1&page_size=${pageSize}`
+          ));
+          packets = latest.packets;
+          currentPage = 1;
+          activeTr = null;
+          currentPkt = null;
+          buildTable(packets);
+          chartPackets = capLiveChartData([...chartPackets, ...newRows]);
+          refreshCharts();
+          document.getElementById('detail-scroll').innerHTML =
+            '<div class="empty" style="margin-top:60px">Select a packet to inspect it.</div>';
+          document.getElementById('table-view').scrollTop = 0;
+        } else if (data.reset) {
+          buildTable([]);
+          refreshCharts();
+        }
+
+        decodedCount = data.decoded;
+        pageCount = Math.max(1, Math.ceil(decodedCount / pageSize));
+        updatePagination();
+        updateHeaderStats(data);
+        setLiveUi(true, `Watching · ${formatBytes(data.remote_size)}`);
+        const resetMessage = data.reset ? ' Remote file restarted; the old live window was cleared.' : '';
+        setStatus(
+          data.new_count
+            ? `Live update: ${data.new_count.toLocaleString()} new packet(s).${resetMessage}`
+            : `Live check complete — no new packets.${resetMessage}`,
+          'ok');
+
+        if (!data.caught_up) setTimeout(pollLive, 250);
+      } catch (e) {
+        if (liveActive) {
+          document.getElementById('live-state').textContent = 'Retry pending';
+          setStatus(`Live check failed: ${e.message}. The next interval will retry.`, 'error');
+        }
+      } finally {
+        livePollInFlight = false;
+      }
+    }
+
     async function decodeInput() {
       const text = document.getElementById('input-area').value;
       if (!text.trim()) { setStatus('Nothing to decode.', 'warn'); return; }
@@ -1023,14 +1261,26 @@
     }
 
     async function run(opts) {
+      stopLive(false);
       setStatus('Decoding…', 'info');
       try {
-        const resp = await fetch('/decode', opts);
-        if (!resp.ok) throw new Error(`Server error ${resp.status}`);
-        const data = await resp.json();
+        const previousDatasetId = datasetId;
+        const separator = opts.url?.includes('?') ? '&' : '?';
+        const resp = await fetch(`${opts.url || '/decode'}${separator}page_size=${pageSize}`, opts);
+        const data = await jsonResponse(resp);
+        datasetId = data.dataset_id;
+        if (previousDatasetId && previousDatasetId !== datasetId) {
+          fetch(`/datasets/${previousDatasetId}`, { method: 'DELETE' }).catch(() => {});
+        }
         packets = data.packets;
+        chartPackets = data.chart_packets || [];
+        currentPage = data.page;
+        pageCount = data.page_count;
+        pageSize = data.page_size;
+        decodedCount = data.decoded;
         activeTr = null;
         buildTable(packets);
+        updatePagination();
         refreshCharts();
         updateHeaderStats(data);
         if (data.decoded > 0) {
@@ -1047,10 +1297,57 @@
       }
     }
 
+    async function loadPage(page) {
+      if (!datasetId) return;
+      page = Math.max(1, Math.min(pageCount, page));
+      setStatus(`Loading page ${page}…`, 'info');
+      try {
+        const resp = await fetch(`/datasets/${datasetId}/packets?page=${page}&page_size=${pageSize}`);
+        if (!resp.ok) throw new Error(`Server error ${resp.status}`);
+        const data = await resp.json();
+        packets = data.packets;
+        currentPage = data.page;
+        pageCount = data.page_count;
+        activeTr = null;
+        currentPkt = null;
+        buildTable(packets);
+        updatePagination();
+        document.getElementById('detail-scroll').innerHTML =
+          '<div class="empty" style="margin-top:60px">Select a packet to inspect it.</div>';
+        document.getElementById('table-view').scrollTop = 0;
+        setStatus(`Showing page ${currentPage} of ${pageCount}, newest packets first.`, 'ok');
+      } catch (e) {
+        setStatus(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    function changePageSize(value) {
+      pageSize = Number(value) || 100;
+      loadPage(1);
+    }
+
+    function updatePagination() {
+      const bar = document.getElementById('pagination-bar');
+      const tableVisible = document.getElementById('table-view').style.display !== 'none';
+      bar.style.display = datasetId && tableVisible ? 'flex' : 'none';
+      document.getElementById('page-summary').textContent =
+        `Page ${currentPage.toLocaleString()} of ${pageCount.toLocaleString()} · ${decodedCount.toLocaleString()} packets`;
+      document.getElementById('page-newest').disabled = currentPage <= 1;
+      document.getElementById('page-newer').disabled = currentPage <= 1;
+      document.getElementById('page-older').disabled = currentPage >= pageCount;
+      document.getElementById('page-oldest').disabled = currentPage >= pageCount;
+      document.getElementById('page-size').value = String(pageSize);
+    }
+
     function clearAll() {
+      stopLive(false);
+      if (datasetId) fetch(`/datasets/${datasetId}`, { method: 'DELETE' }).catch(() => {});
       document.getElementById('input-area').value = '';
-      packets = []; activeTr = null; currentPkt = null;
+      packets = []; chartPackets = []; datasetId = null;
+      currentPage = 1; pageCount = 1; decodedCount = 0;
+      activeTr = null; currentPkt = null;
       buildTable([]);
+      document.getElementById('pagination-bar').style.display = 'none';
       refreshCharts();
       document.getElementById('detail-scroll').innerHTML =
         '<div class="empty" style="margin-top:60px">Select a packet to inspect it.</div>';
@@ -1061,19 +1358,14 @@
     // ── CSV download ───────────────────────────────────────────────────────
 
     function downloadCsv() {
-      if (!packets.length) { alert('No packets to export.'); return; }
-      const rows = [CSV_HEADER.join(','), ...packets.map(p => CSV_HEADER.map(k => esc_csv(p[k])).join(','))];
+      if (!datasetId) { alert('No packets to export.'); return; }
       const a = Object.assign(document.createElement('a'), {
-        href: URL.createObjectURL(new Blob([rows.join('\r\n')], { type: 'text/csv' })),
+        href: `/datasets/${datasetId}/csv`,
         download: 'downlink_decoded.csv',
       });
+      document.body.appendChild(a);
       a.click();
-    }
-
-    function esc_csv(v) {
-      const s = String(v ?? '');
-      return (s.includes(',') || s.includes('"') || s.includes('\n'))
-        ? '"' + s.replace(/"/g, '""') + '"' : s;
+      a.remove();
     }
 
     // ── Table ──────────────────────────────────────────────────────────────
@@ -1202,7 +1494,7 @@
     // ── Stats & status ─────────────────────────────────────────────────────
 
     function updateHeaderStats(data) {
-      const failed = data.packets.filter(p => !p.crc_ok).length;
+      const failed = data.crc_failed;
       document.getElementById('header-stats').innerHTML =
         `<span class="pill pill-blue"><span class="pill-dot"></span>${data.decoded} packets</span>` +
         (failed

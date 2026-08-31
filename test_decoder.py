@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from decoder import crc16_ccitt_false, decode_bytes
+from decoder import crc16_ccitt_false, decode_binary_increment, decode_bytes, decode_path
 
 
 def make_packet(sequence: int, *, status_type: int = 0x21, status_data: int = 0) -> bytes:
@@ -126,6 +128,48 @@ class DecodeBytesTests(unittest.TestCase):
             rows[0]["status_decoded"],
             "rejected_inputs=7; complement_failures=2",
         )
+
+    def test_streams_binary_file_rows_in_order(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "capture.bin"
+            path.write_bytes(b"noise" + b"".join(make_packet(i) for i in range(1, 251)))
+            rows = []
+
+            decoded, ignored = decode_path(path, rows.append)
+
+        self.assertEqual(decoded, 250)
+        self.assertEqual(ignored, 1)
+        self.assertEqual(rows[0]["sequence_number"], 1)
+        self.assertEqual(rows[-1]["sequence_number"], 250)
+
+    def test_streams_hex_text_file_across_lines(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "capture.txt"
+            path.write_text(
+                "unrelated log line\n" + make_packet(3).hex() + "\n" + make_packet(4).hex(),
+                encoding="utf-8",
+            )
+            rows = []
+
+            decoded, ignored = decode_path(path, rows.append)
+
+        self.assertEqual(decoded, 2)
+        self.assertEqual(ignored, 1)
+        self.assertEqual([row["sequence_number"] for row in rows], [3, 4])
+
+    def test_incremental_binary_decode_preserves_split_packet(self) -> None:
+        capture = make_packet(41) + make_packet(42)
+
+        first_rows, first_ignored, pending = decode_binary_increment(capture[:73], 900)
+        second_rows, second_ignored, pending = decode_binary_increment(
+            pending + capture[73:],
+            900 + len(first_rows),
+        )
+
+        self.assertEqual(first_ignored + second_ignored, 0)
+        self.assertEqual([row["sequence_number"] for row in first_rows + second_rows], [41, 42])
+        self.assertEqual([row["packet_number"] for row in first_rows + second_rows], [900, 901])
+        self.assertEqual(pending, b"")
 
 
 if __name__ == "__main__":
